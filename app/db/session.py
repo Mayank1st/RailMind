@@ -2,6 +2,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.base import engine
 
+import app.db.models  # noqa: F401 — register all ORM tables on Base.metadata before FK configure
+
 async_session_local = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,

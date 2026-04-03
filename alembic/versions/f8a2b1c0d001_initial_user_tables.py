@@ -159,8 +159,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("aadhaar_number", sa.String(length=12), nullable=True),
-        sa.Column("pan_number", sa.String(length=10), nullable=True),
+        sa.Column("aadhaar_number", sa.String(length=64), nullable=True),
+        sa.Column("pan_number", sa.String(length=64), nullable=True),
         sa.Column(
             "kyc_status",
             postgresql.ENUM(

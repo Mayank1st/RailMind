@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.constants import Gender, KycStatus, MaritalStatus
-from app.db.base import BaseModel
+from app.db.base import BaseModel, DB_SCHEMA
 
 
 class Users(BaseModel):
@@ -55,7 +55,7 @@ class UserProfiles(BaseModel):
 
     user_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey(f"{DB_SCHEMA}.users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
     )
@@ -80,7 +80,7 @@ class UserContacts(BaseModel):
 
     user_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey(f"{DB_SCHEMA}.users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
     )
@@ -100,12 +100,13 @@ class UserKYC(BaseModel):
 
     user_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey(f"{DB_SCHEMA}.users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
     )
-    aadhaar_number: Mapped[str | None] = mapped_column(String(12))
-    pan_number: Mapped[str | None] = mapped_column(String(10))
+    # Store HMAC-SHA256 hex (64 chars) for deduplication; not plaintext Aadhaar/PAN.
+    aadhaar_number: Mapped[str | None] = mapped_column(String(64))
+    pan_number: Mapped[str | None] = mapped_column(String(64))
     kyc_status: Mapped[KycStatus] = mapped_column(
         SAEnum(KycStatus, name="kyc_status_enum"), default=KycStatus.PENDING
     )

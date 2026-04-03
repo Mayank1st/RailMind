@@ -2,15 +2,18 @@ from datetime import datetime, timezone, date
 
 
 def get_utc_timezone():
-    return datetime.now(timezone.utc)
+    """UTC wall time as naive datetime.
 
-def analyze_age_using_dob(dob:str):
-    birth_date = datetime.strptime(dob, "%Y-%m-%d").date()
+    PostgreSQL columns use ``TIMESTAMP WITHOUT TIME ZONE``; asyncpg rejects
+    mixing those with timezone-aware ``datetime`` values.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def analyze_age_using_dob(dob: date):
     today = date.today()
-    age = today.year - birth_date.year
+    age = today.year - dob.year
 
-    # Adjust if birthday not yet occurred this year
-    if (today.month, today.day) < (birth_date.month, birth_date.day):
+    if (today.month, today.day) < (dob.month, dob.day):
         age -= 1
 
     return age

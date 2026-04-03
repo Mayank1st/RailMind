@@ -4,6 +4,7 @@ from logging.config import fileConfig
 from pathlib import Path
 from urllib.parse import quote_plus
 
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
@@ -50,6 +51,9 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    # Migrations are often run without starting FastAPI (no lifespan schema step).
+    connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.DB_SCHEMA}"'))
+
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -73,6 +77,9 @@ async def run_async_migrations() -> None:
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
+        # Required: otherwise __aexit__ rolls back the whole connection txn and
+        # migrations vanish (tables missing, alembic_version unchanged).
+        await connection.commit()
 
     await connectable.dispose()
 

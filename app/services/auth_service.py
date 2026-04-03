@@ -1,10 +1,16 @@
 import unicodedata
+from enum import Enum
 
 from sqlalchemy.orm import joinedload
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.user import Users, UserKYC
+from app.db.models.user import (
+    UserContacts,
+    UserKYC,
+    UserProfiles,
+    Users,
+)
 from app.utils.helpers import analyze_age_using_dob
 from app.schemas.auth import ContactDetails
 from app.core.security import (
@@ -95,7 +101,7 @@ class AuthService:
 
         # ── 3. Mobile uniqueness ──────────────────────────────────────────────
         result = await db.execute(
-            select(Users).where(Users.mobile_number == payload.mobile_number)
+            select(UserContacts).where(UserContacts.mobile_number == payload.mobile_number)
         )
         if result.scalar_one_or_none():
             raise RailMindException(
@@ -147,56 +153,57 @@ class AuthService:
         # ── 6. Hash sensitive data ────────────────────────────────────────────
         hashed_password = encode_sensistive_data(payload.password)
         hashed_security_answer = encode_sensistive_data(payload.security_answer)
-        encrypted_aadhaar = (
-            encode_sensistive_data(payload.aadhaar_number)
-            if payload.aadhaar_number
-            else None
-        )
-        encrypted_pan = (
-            encode_sensistive_data(payload.pan_number) if payload.pan_number else None
-        )
+        def _enum_str(v) -> str:
+            return v.value if isinstance(v, Enum) else str(v)
 
-        # ── 7. Persist user + KYC atomically ──────────────────────────────────
-        async with db.begin():
-            new_user = Users(
-                username=payload.username,
-                email=payload.email,
-                password_hash=hashed_password,
-                full_name=f"{payload.first_name} {payload.last_name}",
-                mobile_number=payload.mobile_number,
-                preferred_language=payload.preferred_language,
-                security_question=payload.security_question,
-                security_answer=hashed_security_answer,
-                date_of_birth=payload.date_of_birth,
+        # ── 7. Persist user + profile + contact + KYC (same tx as reads above;
+        #     get_db commits after the request; do not call db.begin() here).
+        new_user = Users(
+            username=payload.username,
+            email=payload.email,
+            password=hashed_password,
+            is_email_verified=False,
+            is_mobile_verified=False,
+            preferred_language=payload.preferred_language,
+            security_question=payload.security_question,
+            security_answer_hash=hashed_security_answer,
+        )
+        db.add(new_user)
+        await db.flush()
+
+        db.add(
+            UserProfiles(
+                user_id=new_user.id,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
                 gender=payload.gender,
+                date_of_birth=payload.date_of_birth,
                 marital_status=payload.marital_status,
-                occupation_type=payload.occupation_type,
-                occupation=payload.occupation,
                 nationality=payload.nationality,
+                occupation_type=_enum_str(payload.occupation_type),
+                occupation=_enum_str(payload.occupation),
+            )
+        )
+        db.add(
+            UserContacts(
+                user_id=new_user.id,
+                mobile_number=payload.mobile_number,
                 address_line1=payload.address_line1,
                 street=payload.street,
                 state=payload.state,
                 pin_code=payload.pin_code,
                 country=payload.country,
                 landline_number=payload.landline_number,
-                is_verified=False,  # flipped to True after OTP
-                is_active=False,  # flipped to True after OTP
-                role="user",
             )
-            db.add(new_user)
-            await db.flush()  # get new_user.id without committing
+        )
 
-            if aadhaar_hmac or pan_hmac:
-                new_kyc = UserKYC(
-                    user_id=new_user.id,
-                    aadhaar_number=aadhaar_hmac,  # HMAC for future lookup
-                    pan_number=pan_hmac,  # HMAC for future lookup
-                    encrypted_aadhaar=encrypted_aadhaar,  # encrypted for display/audit
-                    encrypted_pan=encrypted_pan,
-                    is_verified=False,
-                )
-                db.add(new_kyc)
-            # auto-commits here; rolls back entire block on any exception
+        if aadhaar_hmac or pan_hmac:
+            new_kyc = UserKYC(
+                user_id=new_user.id,
+                aadhaar_number=aadhaar_hmac,
+                pan_number=pan_hmac,
+            )
+            db.add(new_kyc)
 
         # ── 8. Fire OTP (outside transaction — side effect) ───────────────────
         # task_send_otp_email.delay(user_id=str(new_user.id), email=payload.email)
