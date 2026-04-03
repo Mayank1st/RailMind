@@ -1,0 +1,9 @@
+Generic single-database configuration with async SQLAlchemy (asyncpg).
+
+Run from project root with a configured `.env`:
+
+  alembic upgrade head
+
+Create a new revision after model changes:
+
+  alembic revision --autogenerate -m "describe change"

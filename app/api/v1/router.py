@@ -1,0 +1,33 @@
+from fastapi import APIRouter
+
+from app.api.v1.endpoints import (
+    admin,
+    auth,
+    booking,
+    cancellation,
+    complaint,
+    fare,
+    health,
+    notification,
+    passenger,
+    payment,
+    pnr,
+    train,
+    waitlist,
+)
+
+router = APIRouter()
+
+router.include_router(health.router)
+router.include_router(auth.router)
+router.include_router(booking.router)
+router.include_router(train.router)
+router.include_router(passenger.router)
+router.include_router(payment.router)
+router.include_router(pnr.router)
+router.include_router(cancellation.router)
+router.include_router(notification.router)
+router.include_router(waitlist.router)
+router.include_router(fare.router)
+router.include_router(complaint.router)
+router.include_router(admin.router)
