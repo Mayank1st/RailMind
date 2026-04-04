@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;background:#f5f5f5;font-family:Arial,sans-serif;">
+
+  <div style="max-width:520px;margin:2rem auto;">
+    <div style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e5e5;">
+
+      <!-- Header -->
+      <div style="background:#1D9E75;padding:2rem;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:22px;font-weight:500;">RailMind</h1>
+        <p style="color:rgba(255,255,255,0.75);font-size:12px;margin:4px 0 0;">AI-Powered Railway Reservation</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:2rem;">
+        <p style="font-size:16px;font-weight:500;color:#111;margin-bottom:8px;">Hi {{ user_name }}, verify your identity</p>  
+        <p style="font-size:14px;color:#666;line-height:1.6;">Use the OTP below to complete your login.</p>
+
+        <!-- OTP Box -->
+        <div style="background:#E1F5EE;border:1.5px solid #5DCAA5;border-radius:12px;padding:1.5rem;text-align:center;margin:1.5rem 0;">
+          <p style="font-size:11px;color:#0F6E56;letter-spacing:1.5px;margin:0 0 10px;">YOUR ONE-TIME PASSWORD</p>
+          <p style="font-size:36px;font-weight:500;color:#0F6E56;letter-spacing:10px;font-family:monospace;margin:0;">{{ otp }}</p>
+          <p style="font-size:12px;color:#1D9E75;margin:10px 0 0;">Valid for {{ validity_minutes }} minutes only</p>
+        </div>
+
+        <!-- Warning -->
+        <div style="background:#FAEEDA;border-radius:8px;padding:0.85rem 1rem;margin-bottom:1.5rem;">
+          <p style="font-size:12px;color:#633806;margin:0;line-height:1.5;">
+            Never share this OTP with anyone. RailMind support will <strong>never</strong> ask for your OTP.
+          </p>
+        </div>
+
+        <p style="font-size:12px;color:#999;text-align:center;">Didn't request this? You can safely ignore this email.</p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f9f9f9;border-top:1px solid #eee;padding:1.25rem 2rem;text-align:center;">
+        <p style="font-size:11px;color:#aaa;margin:0;">© 2026 RailMind. All rights reserved.</p>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>

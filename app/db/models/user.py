@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Stri
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants import Gender, KycStatus, MaritalStatus
+from app.core.constants import Gender, KycStatus, MaritalStatus, UserRole
 from app.db.base import BaseModel, DB_SCHEMA
 
 
@@ -18,6 +18,12 @@ class Users(BaseModel):
         String(255), unique=True, nullable=False, index=True
     )
     password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(
+        String(20),
+        default=UserRole.USER,
+        nullable=False,
+        index=True,
+    )
     is_email_verified: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )

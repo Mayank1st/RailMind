@@ -1,8 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from app.db.base import engine
-
-import app.db.models  # noqa: F401 — register all ORM tables on Base.metadata before FK configure
+import app.db.models
 
 async_session_local = async_sessionmaker(
     bind=engine,
@@ -10,7 +8,6 @@ async_session_local = async_sessionmaker(
     expire_on_commit=False,
     autoflush=False,
 )
-
 
 async def get_db():
     async with async_session_local() as session:

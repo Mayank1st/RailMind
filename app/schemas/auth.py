@@ -3,6 +3,7 @@ from datetime import date
 from typing import Annotated, Optional
 
 from pydantic import EmailStr, Field, field_validator, model_validator
+from app.core.constants import UserRole
 
 from app.core.constants import (
     AllOccupations,
@@ -221,3 +222,42 @@ class ContactDetails(PersonalDetails):
             ),
         ]
     ] = None
+
+
+class LoginRequest(BaseDTO):
+    email: Optional[str] = None
+    username: Optional[str] = None
+    password: str
+
+
+class SendOtpDTO(BaseDTO):
+    email: str
+
+
+class VerifyOtpDTO(BaseDTO):
+    email: str
+    otp: str
+
+
+class UserProfileDTO(BaseDTO):
+    id: str
+    username: str
+    email: str
+    role: UserRole
+    is_email_verified: bool
+    is_mobile_verified: bool
+    preferred_language: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    gender: Optional[Gender] = None
+    date_of_birth: Optional[date] = None
+    marital_status: Optional[MaritalStatus] = None
+    nationality: Optional[str] = None
+    occupation: Optional[str] = None
+    mobile_number: Optional[str] = None
+    address_line1: Optional[str] = None
+    street: Optional[str] = None
+    state: Optional[str] = None
+    pin_code: Optional[str] = None
+    country: Optional[str] = None
+    kyc_status: Optional[str] = None

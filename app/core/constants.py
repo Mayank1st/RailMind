@@ -77,3 +77,17 @@ class Gender(str, Enum):
     FEMALE = "FEMALE"
     TRANSGENDER = "TRANSGENDER"
 
+class UserRole(str, Enum):
+    GUEST  = "GUEST"    # unauthenticated — not stored in DB, used in logic
+    USER   = "USER"     # default registered passenger
+    AGENT  = "AGENT"    # travel agent
+    ADMIN  = "ADMIN"    # full system access
+
+
+# Cookie names
+ACCESS_TOKEN_COOKIE_NAME  = "access_token"
+REFRESH_TOKEN_COOKIE_NAME = "refresh_token"
+CSRF_TOKEN_COOKIE_NAME    = "csrf_token"
+
+# Refresh token only travels to this path — reduces exposure
+REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth/refresh"

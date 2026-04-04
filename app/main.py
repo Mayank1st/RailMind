@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api.router import router as api_router
 from app.db.db_init import (
     create_database_if_not_exists,
