@@ -113,3 +113,8 @@ Desktop.ini
 # Docker (If applicable)
 # ----------------------------------------------------------------------
 docker-compose.override.yml
+
+
+# Seed data — too large for Git, download separately
+data/
+*.csv
