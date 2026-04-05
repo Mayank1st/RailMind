@@ -10,21 +10,22 @@ from app.schemas.train import SearchTrainDTO
 router = APIRouter(prefix="/train", tags=["Train"])
 train_service = TrainService()
 
+
 @router.get("/search")
-async def search_trains(payload:SearchTrainDTO,db: AsyncSession = Depends(get_db)):
-    data = await train_service.search_trains(payload,db)
+async def search_trains(payload: SearchTrainDTO, db: AsyncSession = Depends(get_db)):
+    data = await train_service.search_trains(payload, db)
     return ok(data=data, message="Train Details Fetched Successfully.")
 
 
 @router.get("/{train_number}")
-async def get_train_details_by_train_number(train_number:int,db: AsyncSession = Depends(get_db)):
-    data=await train_service.get_train_details_by_train_number(train_number,db)
+async def get_train_details_by_train_number(
+    train_number: int, db: AsyncSession = Depends(get_db)
+):
+    data = await train_service.get_train_details_by_train_number(train_number, db)
     return ok(data=data, message="Train Details Fetched Successfully.")
 
 
 @router.get("/{train_number}/schedule")
-async def get_train_schedule(train_number:str,db: AsyncSession = Depends(get_db)):
-    data=await train_service.get_train_schedule(train_number,db)
+async def get_train_schedule(train_number: str, db: AsyncSession = Depends(get_db)):
+    data = await train_service.get_train_schedule(train_number, db)
     return ok(data=data, message="Train Details Fetched Successfully.")
-
-
