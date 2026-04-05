@@ -369,3 +369,13 @@ Redis is not running. Start it with `redis-server` in Terminal 1.
 ---
 
 *RailMind — Internal Codename. Database: `railmind_db`*
+
+
+# Dry run — parse only, no DB writes
+python scripts/seed_train_data.py --csv data/Train_details_22122017.csv --dry-run
+
+# Full seed / upsert
+python scripts/seed_train_data.py --csv data/Train_details_22122017.csv
+
+# Custom batch size
+python scripts/seed_train_data.py --csv data/Train_details_22122017.csv --batch-size 1000

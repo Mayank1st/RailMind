@@ -1,12 +1,8 @@
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
+import pytz
 
 
 def get_utc_timezone():
-    """UTC wall time as naive datetime.
-
-    PostgreSQL columns use ``TIMESTAMP WITHOUT TIME ZONE``; asyncpg rejects
-    mixing those with timezone-aware ``datetime`` values.
-    """
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def analyze_age_using_dob(dob: date):
@@ -17,3 +13,11 @@ def analyze_age_using_dob(dob: date):
         age -= 1
 
     return age
+
+def get_time_after_hours(hours: int) -> str:
+    ist = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(ist)
+    future_time = now + timedelta(hours=hours)
+    return future_time.strftime("%H:%M:%S")
+
+

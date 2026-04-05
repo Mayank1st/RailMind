@@ -25,7 +25,7 @@ from app.core.security import (
 from app.core.exceptions import RailMindException
 from app.tasks.notification_tasks import send_otp_email_impl
 from app.utils.logger import logger
-from app.core.constants import (
+from app.core.constants.auth_user import (
     UserRole,
     ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,

@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import BaseModel, DB_SCHEMA
 from sqlalchemy import String, Integer, ForeignKey, Boolean, UniqueConstraint, Index
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID,ARRAY
+from app.core.constants.train import TrainType
 
 
 class Stations(BaseModel):
@@ -20,6 +21,18 @@ class Trains(BaseModel):
         String(10), unique=True, nullable=False, index=True
     )
     train_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    train_type: Mapped[str] = mapped_column(
+        String(30),
+        default=TrainType.UNKNOWN,
+        nullable=False,
+        index=True,             
+    )
+    runs_on_days: Mapped[list] = mapped_column(
+        ARRAY(String),          
+        default=list,
+        nullable=False,
+        comment="Days train runs e.g. ['mon','tue','wed']"
+    )
     source_station_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(f"{DB_SCHEMA}.stations.id", ondelete="RESTRICT"),

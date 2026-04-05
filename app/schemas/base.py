@@ -2,4 +2,7 @@ from pydantic import BaseModel
 
 
 class BaseDTO(BaseModel):
-    model_config = {"extra": "forbid"}
+    model_config = {
+        "extra": "forbid",
+        "from_attributes": True,  
+    }

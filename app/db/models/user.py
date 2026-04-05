@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Stri
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants import Gender, KycStatus, MaritalStatus, UserRole
+from app.core.constants.auth_user import Gender, KycStatus, MaritalStatus, UserRole
 from app.db.base import BaseModel, DB_SCHEMA
 
 
