@@ -1,6 +1,17 @@
 from enum import Enum
 from typing import Union
 
+# ─── Rate Limiting ────────────────────────────────────────────────────────────
+ 
+RATE_LIMIT_SEARCH_PER_MINUTE = 30
+RATE_LIMIT_BOOKING_PER_MINUTE = 5
+
+# ─── Cache TTLs (seconds) ─────────────────────────────────────────────────────
+ 
+CACHE_TTL_TRAIN_SCHEDULE = 3600       # 1 hour  — schedule rarely changes
+CACHE_TTL_SEAT_AVAILABILITY = 60      # 1 min   — high churn during booking window
+CACHE_TTL_FARE = 300                  # 5 mins
+CACHE_TTL_AI_PREDICTION = 900         # 15 mins
 
 class KycStatus(str, Enum):
     PASSED = "PASSED"
