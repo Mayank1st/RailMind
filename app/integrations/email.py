@@ -7,11 +7,13 @@ from app.utils.logger import logger
 
 TEMPLATES_DIR = Path(__file__).parent / "email_templates"
 
+
 def load_template(template_name: str, **kwargs) -> str:
     html = (TEMPLATES_DIR / template_name).read_text()
     for key, value in kwargs.items():
         html = html.replace(f"{{{{ {key} }}}}", str(value))
     return html
+
 
 conf = ConnectionConfig(
     MAIL_USERNAME=settings.EMAIL_SMTP_USER,
@@ -20,8 +22,9 @@ conf = ConnectionConfig(
     MAIL_PORT=settings.MAIL_PORT,
     MAIL_SERVER=settings.EMAIL_SMTP_HOST,
     MAIL_STARTTLS=settings.MAIL_STARTTLS,
-    MAIL_SSL_TLS=settings.MAIL_SSL_TLS
+    MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
 )
+
 
 async def send_email(to: str, subject: str, body: str) -> None:
     logger.info(
@@ -44,6 +47,3 @@ async def send_email(to: str, subject: str, body: str) -> None:
         logger.exception("Email send failed: to=%s subject=%r", to, subject)
         raise
     logger.info("Email send ok: to=%s subject=%r", to, subject)
-
-
-

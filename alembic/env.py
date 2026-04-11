@@ -5,6 +5,7 @@ Async engines + ``async with connect()`` can roll back the whole connection on
 exit unless you remember ``commit()``, which silently undoes migrations. Sync
 ``connect`` + Alembic's ``begin_transaction()`` matches upstream Alembic docs.
 """
+
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -42,7 +43,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=False,
-        compare_server_default=False, 
+        compare_server_default=False,
         version_table_schema=settings.DB_SCHEMA,
         include_schemas=True,
     )
@@ -55,16 +56,14 @@ def run_migrations_online() -> None:
     engine = create_engine(SYNC_DB_URL, poolclass=pool.NullPool)
 
     with engine.connect() as connection:
-        connection.execute(
-            text(f'CREATE SCHEMA IF NOT EXISTS "{settings.DB_SCHEMA}"')
-        )
+        connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.DB_SCHEMA}"'))
         connection.commit()
 
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             compare_type=False,
-            compare_server_default=False, 
+            compare_server_default=False,
             version_table_schema=settings.DB_SCHEMA,
             include_schemas=True,
         )

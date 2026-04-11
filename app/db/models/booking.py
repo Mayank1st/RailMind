@@ -1,8 +1,15 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
-    Boolean, DateTime, Date, Float, ForeignKey,
-    Index, SmallInteger, String, UniqueConstraint,
+    Boolean,
+    DateTime,
+    Date,
+    Float,
+    ForeignKey,
+    Index,
+    SmallInteger,
+    String,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -13,6 +20,7 @@ from app.db.base import BaseModel, DB_SCHEMA
 # ──────────────────────────────────────────────────────────────────────────────
 #  BOOKINGS
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class Bookings(BaseModel):
     __tablename__ = "bookings"
@@ -55,7 +63,9 @@ class Bookings(BaseModel):
     user = relationship("Users", back_populates="bookings")
     train = relationship("Trains")
     source_station = relationship("Stations", foreign_keys=[source_station_id])
-    destination_station = relationship("Stations", foreign_keys=[destination_station_id])
+    destination_station = relationship(
+        "Stations", foreign_keys=[destination_station_id]
+    )
     booking_passengers = relationship(
         "BookingPassengers",
         back_populates="booking",
@@ -78,6 +88,7 @@ class Bookings(BaseModel):
 #  BOOKING PASSENGERS
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class BookingPassengers(BaseModel):
     """
     One row per passenger per booking.
@@ -89,6 +100,7 @@ class BookingPassengers(BaseModel):
     the parent booking status. A single booking can have passengers in mixed
     states (e.g., 2 CNF + 1 RAC + 1 WL if quota was partially available).
     """
+
     __tablename__ = "booking_passengers"
 
     booking_id: Mapped[UUID] = mapped_column(
@@ -117,7 +129,9 @@ class BookingPassengers(BaseModel):
         nullable=False,
     )
     # BerthPreference enum: "LB", "MB", "UB", "SL", "SU", "NP"
-    berth_preference: Mapped[str] = mapped_column(String(5), nullable=False, default="NP")
+    berth_preference: Mapped[str] = mapped_column(
+        String(5), nullable=False, default="NP"
+    )
     # Actual berth assigned (e.g. "LB", "UB"). NULL until assigned at chart time.
     allotted_berth: Mapped[str | None] = mapped_column(String(5), nullable=True)
     # PassengerStatus enum: "CNF" / "RAC" / "WL" / "CAN"
@@ -165,6 +179,7 @@ class BookingPassengers(BaseModel):
 #  RAC SLOTS
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class RACSlots(BaseModel):
     """
     One physical RAC side-lower berth shared by up to 2 passengers.
@@ -181,6 +196,7 @@ class RACSlots(BaseModel):
     row auto-clears the slot. The booking service detects the NULL and
     increments available_rac_slots on the parent SeatInventories row.
     """
+
     __tablename__ = "rac_slots"
 
     seat_inventory_id: Mapped[UUID] = mapped_column(
@@ -231,12 +247,15 @@ class RACSlots(BaseModel):
 
     __table_args__ = (
         # compound uniques — can't do inline
-        UniqueConstraint("seat_inventory_id", "slot_number", name="uq_rac_slots_inv_slot"),
-        UniqueConstraint("seat_inventory_id", "seat_id",     name="uq_rac_slots_inv_seat"),
+        UniqueConstraint(
+            "seat_inventory_id", "slot_number", name="uq_rac_slots_inv_slot"
+        ),
+        UniqueConstraint("seat_inventory_id", "seat_id", name="uq_rac_slots_inv_seat"),
         # partial index — can't do inline
         Index(
             "ix_rac_slots_available",
-            "seat_inventory_id", "slot_number",
+            "seat_inventory_id",
+            "slot_number",
             postgresql_where="is_full = false",
         ),
         {"schema": DB_SCHEMA},
@@ -253,7 +272,8 @@ class RACSlots(BaseModel):
     @property
     def occupancy_count(self) -> int:
         return sum(
-            1 for fk in (
+            1
+            for fk in (
                 self.passenger_1_booking_passenger_id,
                 self.passenger_2_booking_passenger_id,
             )

@@ -33,7 +33,7 @@ def upgrade() -> None:
             schema=schema,
         )
         op.execute(
-            sa.text(f'UPDATE "{schema}".users SET role = \'USER\' WHERE role IS NULL')
+            sa.text(f"UPDATE \"{schema}\".users SET role = 'USER' WHERE role IS NULL")
         )
         op.alter_column(
             "users",

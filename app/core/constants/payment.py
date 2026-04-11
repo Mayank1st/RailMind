@@ -1,7 +1,8 @@
 from enum import Enum
 
-PAYMENT_TIMEOUT_SECONDS = 600         # 10 minutes
+PAYMENT_TIMEOUT_SECONDS = 600  # 10 minutes
 REFUND_PROCESSING_DAYS = 5
+
 
 class PaymentStatus(str, Enum):
     PENDING = "pending"
@@ -9,4 +10,3 @@ class PaymentStatus(str, Enum):
     SUCCESS = "success"
     FAILED = "failed"
     REFUNDED = "refunded"
-

@@ -14,11 +14,12 @@ __all__ = ["get_db", "get_redis", "get_current_user", "get_current_user_with_csr
 
 # ─── Redis ────────────────────────────────────────────────────────────────────
 
+
 async def get_redis() -> AsyncGenerator[Redis, None]:
     redis = Redis.from_url(
         settings.REDIS_URL,
         encoding="utf-8",
-        decode_responses=True,  
+        decode_responses=True,
     )
     try:
         yield redis
@@ -27,6 +28,7 @@ async def get_redis() -> AsyncGenerator[Redis, None]:
 
 
 # ─── Current User ─────────────────────────────────────────────────────────────
+
 
 async def get_current_user(
     access_token: str = Cookie(None, alias="access_token"),
@@ -58,11 +60,12 @@ async def get_current_user(
             message="Token has been revoked. Please login again",
             status_code=401,
         )
-    
+
     return payload
 
 
 # ─── Current User + CSRF ──────────────────────────────────────────────────────
+
 
 async def get_current_user_with_csrf(
     access_token: str = Cookie(None, alias="access_token"),

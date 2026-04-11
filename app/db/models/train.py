@@ -97,13 +97,13 @@ class TrainStations(BaseModel):
         UUID(as_uuid=True),
         ForeignKey(f"{DB_SCHEMA}.trains.id", ondelete="CASCADE"),
         nullable=False,
-        index=True, 
+        index=True,
     )
     station_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(f"{DB_SCHEMA}.stations.id", ondelete="RESTRICT"),
         nullable=False,
-        index=True, 
+        index=True,
     )
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
     arrival_time: Mapped[str] = mapped_column(String, nullable=True)
@@ -138,7 +138,7 @@ class Coaches(BaseModel):
         UUID(as_uuid=True),
         ForeignKey(f"{DB_SCHEMA}.trains.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,  
+        index=True,
     )
     coach_number: Mapped[str] = mapped_column(
         String(5),
@@ -146,9 +146,7 @@ class Coaches(BaseModel):
     )
     train_class: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
     total_seats: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    is_ac: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )  
+    is_ac: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     coach_position: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     train = relationship("Trains", back_populates="coaches")
@@ -172,15 +170,13 @@ class Seats(BaseModel):
         UUID(as_uuid=True),
         ForeignKey(f"{DB_SCHEMA}.coaches.id", ondelete="CASCADE"),
         nullable=False,
-        index=True, 
+        index=True,
     )
     seat_number: Mapped[int] = mapped_column(
         SmallInteger,
         nullable=False,
     )
-    berth_type: Mapped[str] = mapped_column(
-        String(5), nullable=False
-    )  
+    berth_type: Mapped[str] = mapped_column(String(5), nullable=False)
     is_rac_berth: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     coach = relationship("Coaches", back_populates="seats")
@@ -207,9 +203,7 @@ class SeatInventories(BaseModel):
         index=True,
     )
     journey_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    train_class: Mapped[str] = mapped_column(
-        String(5), nullable=False
-    ) 
+    train_class: Mapped[str] = mapped_column(String(5), nullable=False)
     quota: Mapped[str] = mapped_column(String(5), nullable=False)
 
     # ── Confirmed seat counters ───────────────────────────────────────────────

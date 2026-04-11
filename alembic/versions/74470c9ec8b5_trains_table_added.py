@@ -13,6 +13,7 @@ The database was already correct; this revision exists only to keep revision
 history linear. Safe to apply: ``upgrade`` / ``downgrade`` do nothing.
 
 """
+
 from typing import Sequence, Union
 
 revision: str = "74470c9ec8b5"

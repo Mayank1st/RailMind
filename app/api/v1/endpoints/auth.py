@@ -44,7 +44,7 @@ async def login_user(
 async def send_otp(
     payload: SendOtpDTO,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis), 
+    redis: Redis = Depends(get_redis),
 ):
     data = await auth_service.send_otp(payload.email, db, redis)
     return created(data=data, message="OTP sent successfully. Valid for 10 minutes.")

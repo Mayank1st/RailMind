@@ -60,7 +60,9 @@ def upgrade() -> None:
         sa.Column("train_number", sa.String(length=10), nullable=False),
         sa.Column("train_name", sa.String(length=100), nullable=False),
         sa.Column("source_station_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("destination_station_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column(
+            "destination_station_id", postgresql.UUID(as_uuid=True), nullable=False
+        ),
         sa.ForeignKeyConstraint(
             ["source_station_id"],
             [f"{schema}.stations.id"],
@@ -154,8 +156,12 @@ def downgrade() -> None:
     if not insp.has_table("train_stations", schema=schema):
         return
 
-    op.drop_index("ix_train_stations_station_id", table_name="train_stations", schema=schema)
-    op.drop_index("ix_train_stations_train_id", table_name="train_stations", schema=schema)
+    op.drop_index(
+        "ix_train_stations_station_id", table_name="train_stations", schema=schema
+    )
+    op.drop_index(
+        "ix_train_stations_train_id", table_name="train_stations", schema=schema
+    )
     op.drop_table("train_stations", schema=schema)
     op.drop_index("ix_trains_train_number", table_name="trains", schema=schema)
     op.drop_table("trains", schema=schema)
