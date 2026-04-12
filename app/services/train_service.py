@@ -1,14 +1,27 @@
 import pytz
 import logger
 from fastapi import status
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy import and_, select, or_, null
-from app.db.models.train import Trains, TrainStations, Stations
+from app.db.models.train import (
+    Trains,
+    TrainStations,
+    Stations,
+    SeatInventories,
+    Coaches,
+    Seats,
+)
+from app.db.models.booking import BookingPassengers, Bookings
 from datetime import datetime
-from app.schemas.train import SearchTrainDTO
+from app.schemas.train import SearchTrainDTO, CheckSeatAvailabilityDTO
+from app.schemas.Response.trainResponseDTO import (
+    TrainDetailResponse,
+    CoachWiseSeatAvailabilityResponse,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.integrations.rapidapi import rapidapi_client
 from app.core.exceptions import RailMindException
+from app.core.constants.booking import PassengerStatus
 
 from app.utils.helpers import get_time_after_hours
 
@@ -181,7 +194,9 @@ class TrainService:
         try:
             train_number = str(train_number)
             result = await db.execute(
-                select(Trains).where(Trains.train_number == train_number)
+                select(Trains)
+                .options(selectinload(Trains.coaches))
+                .where(Trains.train_number == train_number)
             )
             data = result.scalar_one_or_none()
 
@@ -192,13 +207,7 @@ class TrainService:
                     status_code=status.HTTP_404_NOT_FOUND,
                 )
 
-            return {
-                "id": data.id,
-                "train_number": data.train_number,
-                "train_name": data.train_name,
-                "train_type": data.train_type,
-                "run_on_days": data.runs_on_days,
-            }
+            return TrainDetailResponse.model_validate(data)
         except Exception as e:
             print(f"Error: {e}")
             raise
@@ -260,3 +269,271 @@ class TrainService:
         except Exception as e:
             print(f"Error : {e}")
             raise
+
+    async def get_seat_availability(
+        self, train_number: str, payload: CheckSeatAvailabilityDTO, db: AsyncSession
+    ) -> dict:
+        try:
+            result = await db.execute(
+                select(Trains)
+                .options(selectinload(Trains.stops).selectinload(TrainStations.station))
+                .where(Trains.train_number == train_number)
+            )
+            train_data = result.scalar_one_or_none()
+
+            if not train_data:
+                raise RailMindException(
+                    code="RM-TRN-001",
+                    message="Train not found",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+
+            from_stop = next(
+                (
+                    s
+                    for s in train_data.stops
+                    if s.station.station_code == payload.from_station
+                ),
+                None,
+            )
+            to_stop = next(
+                (
+                    s
+                    for s in train_data.stops
+                    if s.station.station_code == payload.to_station
+                ),
+                None,
+            )
+
+            if not from_stop:
+                raise RailMindException(
+                    code="RM-TRN-002",
+                    message=f"Station {payload.from_station} not found on this train route",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            if not to_stop:
+                raise RailMindException(
+                    code="RM-TRN-002",
+                    message=f"Station {payload.to_station} not found on this train route",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # ── Sequence check ───────────────────────────────────────────────────
+            if from_stop.sequence_number >= to_stop.sequence_number:
+                raise RailMindException(
+                    code="RM-TRN-003",
+                    message=f"{payload.from_station} comes after {payload.to_station} on this route",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            wl_type = self._determine_wl_type(
+                is_source=from_stop.is_source,
+                is_remote_location=from_stop.station.is_remote_location,
+                quota=payload.quota,
+            )
+
+            inv_result = await db.execute(
+                select(SeatInventories).where(
+                    SeatInventories.train_id == train_data.id,
+                    SeatInventories.journey_date == payload.journey_date,
+                    SeatInventories.train_class == payload.train_class,
+                    SeatInventories.quota == payload.quota,
+                )
+            )
+            inventory = inv_result.scalar_one_or_none()
+
+            if not inventory:
+                raise RailMindException(
+                    code="RM-TRN-004",
+                    message="No availability data found for this train on the selected date",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+
+            # ── Availability status decide karo ──────────────────────────────────
+            availability_status = inventory.booking_availability
+
+            return {
+                "train_number": train_data.train_number,
+                "train_name": train_data.train_name,
+                "journey_date": payload.journey_date,
+                "from_station": payload.from_station,
+                "to_station": payload.to_station,
+                "train_class": payload.train_class,
+                "quota": payload.quota,
+                "availability_status": availability_status,
+                "available_seats": inventory.available_confirmed_seats,
+                "available_rac_slots": inventory.available_rac_slots,
+                "wl_count": inventory.wl_count,
+                "next_wl_position": inventory.next_wl_position,
+                "wl_type": wl_type,
+            }
+
+        except Exception as e:
+            raise e
+
+    def _determine_wl_type(
+        self,
+        is_source: bool,
+        is_remote_location: bool,
+        quota: str,
+    ) -> str:
+        if quota in ("TQ", "PT"):
+            return "TQWL"
+        if is_source:
+            return "GNWL"
+        if is_remote_location:
+            return "RLWL"
+        return "PQWL"
+
+    async def get_seat_availability_by_coach_number(
+        self, train_number: str, payload: CheckSeatAvailabilityDTO, db: AsyncSession
+    ) -> dict:
+        result = await db.execute(
+            select(Trains)
+            .options(
+                selectinload(Trains.stops).selectinload(TrainStations.station),
+                selectinload(Trains.coaches),
+            )
+            .where(Trains.train_number == train_number)
+        )
+        train_data = result.scalar_one_or_none()
+
+        if not train_data:
+            raise RailMindException(
+                code="RM-TRN-001",
+                message="Train not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        # ── from/to stop dhundho ─────────────────────────────────────────────────
+        from_stop = next(
+            (
+                s
+                for s in train_data.stops
+                if s.station.station_code == payload.from_station
+            ),
+            None,
+        )
+        to_stop = next(
+            (
+                s
+                for s in train_data.stops
+                if s.station.station_code == payload.to_station
+            ),
+            None,
+        )
+
+        if not from_stop:
+            raise RailMindException(
+                code="RM-TRN-002",
+                message=f"Station {payload.from_station} not found on this train route",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if not to_stop:
+            raise RailMindException(
+                code="RM-TRN-002",
+                message=f"Station {payload.to_station} not found on this train route",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Sequence check ───────────────────────────────────────────────────────
+        if from_stop.sequence_number >= to_stop.sequence_number:
+            raise RailMindException(
+                code="RM-TRN-003",
+                message=f"{payload.from_station} comes after {payload.to_station} on this route",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── WL type decide karo ──────────────────────────────────────────────────
+        wl_type = self._determine_wl_type(
+            is_source=from_stop.is_source,
+            is_remote_location=from_stop.station.is_remote_location,
+            quota=payload.quota,
+        )
+
+        # ── Requested class ke coaches filter karo ───────────────────────────────
+        filtered_coaches = [
+            c
+            for c in train_data.coaches
+            if c.train_class == payload.train_class
+            and c.coach_number == payload.coach_number
+        ]
+
+        if not filtered_coaches:
+            raise RailMindException(
+                code="RM-TRN-005",
+                message=f"No {payload.train_class} coaches found on this train",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        # ── Already booked seat_ids fetch karo is journey ke liye ────────────────
+        # Yeh seats CNF passengers ko assign hain — inhe vacant nahi dikhana
+        booked_seats_result = await db.execute(
+            select(BookingPassengers.seat_id)
+            .join(Bookings, Bookings.id == BookingPassengers.booking_id)
+            .where(
+                Bookings.train_id == train_data.id,
+                Bookings.journey_date == payload.journey_date,
+                Bookings.train_class == payload.train_class,
+                BookingPassengers.passenger_status == PassengerStatus.CONFIRMED,
+                BookingPassengers.seat_id.is_not(None),
+            )
+        )
+        booked_seat_ids = {row.seat_id for row in booked_seats_result.fetchall()}
+
+        # ── Har coach ke liye seats load karo ────────────────────────────────────
+        coach_ids = [c.id for c in filtered_coaches]
+        seats_result = await db.execute(
+            select(Seats).where(
+                Seats.coach_id.in_(coach_ids),
+                Seats.is_rac_berth == False,  # RAC berths confirmed seats nahi hain
+            )
+        )
+        all_seats = seats_result.scalars().all()
+
+        # Coach id → seats mapping banao
+        seats_by_coach: dict = {}
+        for seat in all_seats:
+            coach_id_str = str(seat.coach_id)
+            if coach_id_str not in seats_by_coach:
+                seats_by_coach[coach_id_str] = []
+            seats_by_coach[coach_id_str].append(
+                {
+                    "seat_number": seat.seat_number,
+                    "berth_type": seat.berth_type,
+                    "is_available": seat.id not in booked_seat_ids,
+                }
+            )
+
+            coaches_data = [
+                {
+                    "coach_number": coach.coach_number,
+                    "train_class": coach.train_class,
+                    "total_seats": coach.total_seats,
+                    "coach_position": coach.coach_position,
+                    "available_seats": sum(
+                        1
+                        for s in seats_by_coach.get(str(coach.id), [])
+                        if s["is_available"]
+                    ),
+                    "seats": seats_by_coach.get(str(coach.id), []),
+                }
+                for coach in sorted(
+                    filtered_coaches, key=lambda c: c.coach_position or 0
+                )
+            ]
+
+        # ── Coach-wise response banao ─────────────────────────────────────────────
+        return CoachWiseSeatAvailabilityResponse.model_validate(
+            {
+                "train_number": train_data.train_number,
+                "train_name": train_data.train_name,
+                "journey_date": payload.journey_date,
+                "from_station": payload.from_station,
+                "to_station": payload.to_station,
+                "train_class": payload.train_class,
+                "quota": payload.quota,
+                "wl_type": wl_type,
+                "coaches": coaches_data,
+            }
+        )

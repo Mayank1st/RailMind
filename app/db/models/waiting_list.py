@@ -64,7 +64,14 @@ class WaitlistEntries(BaseModel):
     )
     auto_cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    # relationships ...
+    # ── Relationships ─────────────────────────────────────────────────────────
+    booking = relationship("Bookings")
+    booking_passenger = relationship("BookingPassengers", uselist=False)
+    seat_inventory = relationship("SeatInventories")
+    source_station = relationship("Stations", foreign_keys=[source_station_id])
+    destination_station = relationship(
+        "Stations", foreign_keys=[destination_station_id]
+    )
 
     __table_args__ = (
         # ↓ compound index — can't do inline

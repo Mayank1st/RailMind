@@ -40,18 +40,6 @@ class BookingStatus(str, Enum):
     REFUND_COMPLETED = "refund_completed"
 
 
-class Quota(str, Enum):
-    GENERAL = "GN"
-    TATKAL = "TQ"
-    PREMIUM_TATKAL = "PT"
-    LADIES = "LD"
-    LOWER_BERTH = "LB"
-    HANDICAPPED = "HP"
-    DEFENCE = "DF"
-    SENIOR_CITIZEN = "SS"
-    FOREIGN_TOURIST = "FT"
-
-
 class BerthPreference(str, Enum):
     LOWER = "LB"
     MIDDLE = "MB"

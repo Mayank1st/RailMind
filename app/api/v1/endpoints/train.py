@@ -5,7 +5,7 @@ from app.core.response import APIResponse, created, ok
 
 
 from app.services.train_service import TrainService
-from app.schemas.train import SearchTrainDTO
+from app.schemas.train import SearchTrainDTO, CheckSeatAvailabilityDTO
 
 router = APIRouter(prefix="/train", tags=["Train"])
 train_service = TrainService()
@@ -29,3 +29,25 @@ async def get_train_details_by_train_number(
 async def get_train_schedule(train_number: str, db: AsyncSession = Depends(get_db)):
     data = await train_service.get_train_schedule(train_number, db)
     return ok(data=data, message="Train Details Fetched Successfully.")
+
+
+@router.get("/{train_number}/seat-availability")
+async def get_seat_availability(
+    train_number: str,
+    payload: CheckSeatAvailabilityDTO,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await train_service.get_seat_availability(train_number, payload, db)
+    return ok(data=data, message="Seat Availability Fetched Successfully.")
+
+
+@router.get("/{train_number}/coach/seat-availability")
+async def get_seat_availability_by_coach_number(
+    train_number: str,
+    payload: CheckSeatAvailabilityDTO,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await train_service.get_seat_availability_by_coach_number(
+        train_number, payload, db
+    )
+    return ok(data=data, message="Seat Availability Fetched Successfully.")

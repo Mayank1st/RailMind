@@ -26,3 +26,15 @@ class TrainClass(str, Enum):
     SECOND_SITTING = "2S"
     FIRST_CLASS = "FC"
     AC_3_ECONOMY = "3E"
+
+
+class Quota(str, Enum):
+    GENERAL = "GN"
+    TATKAL = "TQ"
+    PREMIUM_TATKAL = "PT"
+    LADIES = "LD"
+    LOWER_BERTH = "LB"
+    HANDICAPPED = "HP"
+    DEFENCE = "DF"
+    SENIOR_CITIZEN = "SS"
+    FOREIGN_TOURIST = "FT"

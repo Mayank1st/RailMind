@@ -60,7 +60,7 @@ class Bookings(BaseModel):
     # Explicit booking timestamp — separate from created_at which is the record creation time
     booked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    user = relationship("Users", back_populates="bookings")
+    user = relationship("Users")
     train = relationship("Trains")
     source_station = relationship("Stations", foreign_keys=[source_station_id])
     destination_station = relationship(
@@ -71,7 +71,8 @@ class Bookings(BaseModel):
         back_populates="booking",
         cascade="all, delete-orphan",
     )
-    waitlist_entries = relationship("WaitlistEntries", back_populates="booking")
+    # waitlist_entries = relationship("WaitlistEntries", back_populates="booking")
+    waitlist_entries = relationship("WaitlistEntries", uselist=False)
     # payment = relationship("Payments", back_populates="booking", uselist=False)
 
     __table_args__ = (
@@ -139,7 +140,7 @@ class BookingPassengers(BaseModel):
     fare: Mapped[float] = mapped_column(Float, nullable=False)
 
     booking = relationship("Bookings", back_populates="booking_passengers")
-    passenger = relationship("Passengers")
+    # passenger = relationship("Passengers")
     seat = relationship("Seats")
     seat_inventory = relationship("SeatInventories")
     # A WL passenger has one WaitlistEntries row; CNF/RAC passengers have none
