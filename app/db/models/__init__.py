@@ -3,3 +3,4 @@ from app.db.models.security_question import *
 import app.db.models.train  # noqa: F401  — Stations, Trains, TrainStations, Coaches, Seats, SeatInventories
 from app.db.models.booking import *  # — Bookings, BookingPassengers, RACSlots
 from app.db.models.waiting_list import *  # — WaitlistEntries
+from app.db.models.passengers import *

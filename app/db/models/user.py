@@ -55,6 +55,12 @@ class Users(BaseModel):
         cascade="all, delete-orphan",
     )
 
+    passengers = relationship(
+        "Passengers",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
 
 class UserProfiles(BaseModel):
     __tablename__ = "user_profiles"

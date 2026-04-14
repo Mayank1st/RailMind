@@ -129,6 +129,12 @@ class BookingPassengers(BaseModel):
         ForeignKey(f"{DB_SCHEMA}.seat_inventories.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    passenger_id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{DB_SCHEMA}.passengers.id", ondelete="RESTRICT"),  # ← uncomment
+        nullable=False,
+        index=True,
+    )
     # BerthPreference enum: "LB", "MB", "UB", "SL", "SU", "NP"
     berth_preference: Mapped[str] = mapped_column(
         String(5), nullable=False, default="NP"
@@ -140,7 +146,7 @@ class BookingPassengers(BaseModel):
     fare: Mapped[float] = mapped_column(Float, nullable=False)
 
     booking = relationship("Bookings", back_populates="booking_passengers")
-    # passenger = relationship("Passengers")
+    passenger = relationship("Passengers")
     seat = relationship("Seats")
     seat_inventory = relationship("SeatInventories")
     # A WL passenger has one WaitlistEntries row; CNF/RAC passengers have none
