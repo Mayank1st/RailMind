@@ -287,3 +287,35 @@ class RACSlots(BaseModel):
             f"RAC{self.rac_position_passenger_1}/{self.rac_position_passenger_2} "
             f"occupancy={self.occupancy_count}/2>"
         )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Fare Rules
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class FareRules(BaseModel):
+    __tablename__ = "fare_rules"
+
+    train_class: Mapped[str] = mapped_column(String(5), nullable=False, unique=True)
+    base_fare_per_km: Mapped[float] = mapped_column(Float, nullable=False)
+    reservation_charge: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    superfast_min_charge: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    tatkal_multiplier: Mapped[float] = mapped_column(Float, nullable=False)
+    premium_tatkal_min_multiplier: Mapped[float] = mapped_column(
+        Float, nullable=False, default=1.0
+    )
+    premium_tatkal_max_multiplier: Mapped[float] = mapped_column(
+        Float, nullable=False, default=3.0
+    )
+    gst_percent: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    minimum_fare: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
+    __table_args__ = ({"schema": DB_SCHEMA},)
+
+    def __repr__(self) -> str:
+        return (
+            f"<FareRules class={self.train_class} "
+            f"base_fare_per_km={self.base_fare_per_km} "
+            f"min_fare={self.minimum_fare}>"
+        )

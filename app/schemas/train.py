@@ -42,4 +42,10 @@ class CheckSeatAvailabilityDTO(BaseDTO):
     to_station: Annotated[str, Field(examples=["BCT"])]
     train_class: Annotated[TrainClass, Field(examples=[TrainClass.SLEEPER])]
     quota: Annotated[Quota, Field(default="GN", examples=["GN"])]
-    coach_number: str
+    coach_number: Optional[str] = None
+
+
+class ValidateJourneyDTO(BaseDTO):
+    train_number: Optional[Annotated[str, Field(examples=["12345"])]]
+    from_station: Annotated[str, Field(examples=["NDLS"])]
+    to_station: Annotated[str, Field(examples=["BCT"])]
