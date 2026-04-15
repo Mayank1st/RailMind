@@ -24,10 +24,10 @@ class BaseModel(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=get_utc_timezone, nullable=False
+        DateTime(timezone=True), default=get_utc_timezone, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         default=get_utc_timezone,
         onupdate=get_utc_timezone,
         nullable=False,

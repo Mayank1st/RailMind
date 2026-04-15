@@ -3,7 +3,7 @@ import pytz
 
 
 def get_utc_timezone():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(timezone.utc)
 
 
 def analyze_age_using_dob(dob: date):

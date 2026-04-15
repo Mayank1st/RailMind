@@ -91,16 +91,6 @@ class Bookings(BaseModel):
 
 
 class BookingPassengers(BaseModel):
-    """
-    One row per passenger per booking.
-
-    seat_id is NULL at booking time for WL and RAC passengers —
-    physical berth is assigned only at chart preparation (CNF) or by TTE (RAC upgrade).
-
-    passenger_status tracks the individual passenger's state, independent of
-    the parent booking status. A single booking can have passengers in mixed
-    states (e.g., 2 CNF + 1 RAC + 1 WL if quota was partially available).
-    """
 
     __tablename__ = "booking_passengers"
 

@@ -38,3 +38,12 @@ class Quota(str, Enum):
     DEFENCE = "DF"
     SENIOR_CITIZEN = "SS"
     FOREIGN_TOURIST = "FT"
+
+
+class BerthType(str, Enum):
+    LOWER = "LB"
+    MIDDLE = "MB"
+    UPPER = "UB"
+    SIDE_LOWER = "SL"
+    SIDE_UPPER = "SU"
+    SEAT = "SEAT"  # CC / 2S coaches

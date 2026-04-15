@@ -16,7 +16,7 @@ class Passengers(BaseModel):
     )
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     age: Mapped[int] = mapped_column(Integer, nullable=False)
-    gender: Mapped[str] = mapped_column(String(1), nullable=False)
+    gender: Mapped[str] = mapped_column(String(10), nullable=False)
     # IdType enum value: "AADHAAR" / "PAN" / "PASSPORT" / "VOTER_ID" / "DRIVING_LICENSE"
     id_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     id_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
