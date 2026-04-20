@@ -379,3 +379,8 @@ python scripts/seed_train_data.py --csv data/Train_details_22122017.csv
 
 # Custom batch size
 python scripts/seed_train_data.py --csv data/Train_details_22122017.csv --batch-size 1000
+
+
+
+# To Check The Folder Structure 
+tree -L 2 -I '__pycache__|venv'

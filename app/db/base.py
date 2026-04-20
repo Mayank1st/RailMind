@@ -36,6 +36,9 @@ class BaseModel(Base):
         UUID(as_uuid=True), nullable=True
     )
 
+    def to_dict(self) -> dict:
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 
 DB_SCHEMA = settings.DB_SCHEMA
 

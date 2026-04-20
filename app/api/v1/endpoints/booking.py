@@ -58,3 +58,37 @@ async def get_booking_details_by_id(
         data=data,
         message=f"User Booking List Fetched successfully.",
     )
+
+
+@router.post("/{booking_id}/cancel")
+async def cancel_booking(
+    booking_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    data = await booking_service.cancel_booking(
+        booking_id,
+        current_user_id=current_user["sub"],
+        db=db,
+    )
+    return ok(
+        data=data,
+        message=f"User Booking Cancelled Fetched successfully.",
+    )
+
+
+@router.get("/{booking_id}/receipt")
+async def download_receipt(
+    booking_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    data = await booking_service.download_receipt(
+        booking_id,
+        current_user_id=current_user["sub"],
+        db=db,
+    )
+    return ok(
+        data=data,
+        message=f"Ticket Downloaded Successfully.",
+    )

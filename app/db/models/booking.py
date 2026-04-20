@@ -58,7 +58,7 @@ class Bookings(BaseModel):
     quota: Mapped[str] = mapped_column(String(5), nullable=False)
     total_fare: Mapped[float] = mapped_column(Float, nullable=False)
     # Explicit booking timestamp — separate from created_at which is the record creation time
-    booked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    booked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     user = relationship("Users")
     train = relationship("Trains")
@@ -100,13 +100,6 @@ class BookingPassengers(BaseModel):
         nullable=False,
         index=True,
     )
-    # FK to the saved passengers master list (Passengers domain)
-    passenger_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
-        # ForeignKey(f"{DB_SCHEMA}.passengers.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True,
-    )
     # NULL for WL/RAC passengers until seat is physically assigned
     seat_id: Mapped[UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -121,7 +114,7 @@ class BookingPassengers(BaseModel):
     )
     passenger_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(f"{DB_SCHEMA}.passengers.id", ondelete="RESTRICT"),  # ← uncomment
+        ForeignKey(f"{DB_SCHEMA}.passengers.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
