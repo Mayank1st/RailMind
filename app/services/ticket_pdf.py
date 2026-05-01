@@ -37,8 +37,6 @@ ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 LOGO_PATH = ASSETS_DIR / "images" / "logo.png"
 FONT_DIR = ASSETS_DIR / "fonts"
 
-print("LOGO_PATH========>", LOGO_PATH)
-
 # ── Font Names (set during registration) ──
 FONT_REGULAR = "NotoSans"
 FONT_BOLD = "NotoSans-Bold"
@@ -195,7 +193,9 @@ def generate_qr(data):
 def build_ticket_pdf(ticket: dict, output_path: str):
     register_fonts()
 
-    c = canvas.Canvas(output_path, pagesize=A4)
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    # c = canvas.Canvas(output_path, pagesize=A4)
     c.setTitle("RailMind E-Ticket")
     c.setAuthor("RailMind")
 
@@ -663,7 +663,8 @@ def build_ticket_pdf(ticket: dict, output_path: str):
     )
 
     c.save()
-    print(f"PDF generated: {output_path}")
+    return buffer.getvalue()
+    # print(f"PDF generated: {output_path}")
 
 
 if __name__ == "__main__":

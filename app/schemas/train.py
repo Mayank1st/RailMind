@@ -28,7 +28,7 @@ class SearchTrainDTO(BaseDTO):
         int,
         Field(
             ge=1,
-            le=8,
+            # le=8,
             examples=[2],
             default=1,
             description="Show trains departing/arriving in next X hours",

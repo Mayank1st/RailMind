@@ -37,7 +37,6 @@ ASSETS_DIR = Path(__file__).resolve().parent / "app" / "assets"
 LOGO_PATH = ASSETS_DIR / "images" / "logo.png"
 FONT_DIR = ASSETS_DIR / "fonts"
 
-print("LOGO_PATH========>", LOGO_PATH)
 
 # ── Font Names (set during registration) ──
 FONT_REGULAR = "NotoSans"

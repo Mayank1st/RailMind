@@ -57,6 +57,19 @@ class Settings(BaseSettings):
     RAPIDAPI_KEY: str
     RAPIDAPI_HOST: str
 
+    # GEMINI API
+    GEMINI_API_KEY: str
+    GEMINI_API_KEY_NAME: str
+    GEMINI_API_PROJECT_NAME: str
+    GEMINI_API_PROJECT_NUMBER: str
+    GEMINI_TEMPERATURE: float = 0.2
+    GEMINI_MAX_OUTPUT_TOKENS: int = 2048
+
+    # SUPABASE
+    SUPABASE_URL: str
+    SUPABASE_KEY: str
+    SUPABASE_TICKET_BUCKET: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

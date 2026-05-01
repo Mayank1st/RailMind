@@ -21,3 +21,23 @@ def get_time_after_hours(hours: int) -> str:
     now = datetime.now(ist)
     future_time = now + timedelta(hours=hours)
     return future_time.strftime("%H:%M:%S")
+
+
+def parse_datetime_flexible(value: str) -> datetime:
+
+    value = value.strip()
+    formats = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%d-%m-%Y %H:%M:%S",
+        "%d-%m-%Y",
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+
+    raise ValueError(f"Unsupported datetime format: {value}")

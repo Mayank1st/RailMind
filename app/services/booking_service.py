@@ -27,6 +27,7 @@ from app.services.train_service import TrainService
 from app.services.passenger_service import PassengerService
 from app.services.ticket_pdf import build_ticket_pdf
 from app.utils.helpers import get_utc_timezone
+from app.integrations.supabase_client import upload_pdf_to_supabase
 
 common_service = CommonService()
 train_service = TrainService()
@@ -182,6 +183,7 @@ class BookingService:
 
         return [
             {
+                "booking_id": booking.id,
                 "train_id": booking.train_id,
                 "user_id": booking.user_id,
                 "user_name": booking.user.username,
@@ -222,7 +224,9 @@ class BookingService:
             quota=booking_data.quota,
             total_fare=booking_data.total_fare,
             source_station_name=booking_data.source_station.station_name,
+            source_station_code=booking_data.source_station.station_code,
             destination_station_name=booking_data.destination_station.station_name,
+            destination_station_code=booking_data.destination_station.station_code,
         )
 
     async def cancel_booking(
@@ -497,10 +501,15 @@ class BookingService:
         # ) as tmp:
         #     output_path = tmp.name
 
-        output_path = str(RECEIPTS_DIR / f"ticket_{booking.pnr_number}.pdf")
+        pdf_bytes = str(RECEIPTS_DIR / f"ticket_{booking.pnr_number}.pdf")
 
-        build_ticket_pdf(ticket=ticket_payload, output_path=output_path)
-        return output_path
+        file_name = f"ticket_{booking.pnr_number}.pdf"
+        public_url = upload_pdf_to_supabase(
+            pdf_bytes=pdf_bytes,
+            file_name=file_name,
+        )
+
+        return public_url
 
     # ── Private helpers ───────────────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ from app.schemas.Request.bookingRequestDTO import CreateBookingDTO
 from app.api.deps import get_current_user, get_db, get_redis
 from app.core.response import APIResponse, created, ok
 
+
 router = APIRouter(prefix="/bookings", tags=["Booking"])
 
 booking_service = BookingService()
@@ -23,7 +24,7 @@ async def create_booking(
         current_user_id=current_user["sub"],
         db=db,
     )
-    return ok(
+    return created(
         data=data,
         message=f"Booking for train {payload.train_number} created successfully.",
     )
@@ -88,7 +89,7 @@ async def download_receipt(
         current_user_id=current_user["sub"],
         db=db,
     )
-    return ok(
+    return created(
         data=data,
         message=f"Ticket Downloaded Successfully.",
     )

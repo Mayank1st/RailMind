@@ -10,4 +10,6 @@ class GetBookingDetailsByIdResponse(BaseDTO):
     quota: str
     total_fare: float
     source_station_name: str
+    source_station_code: str
     destination_station_name: str
+    destination_station_code: str

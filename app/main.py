@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.router import router as api_router
+from app.ai.router import router as ai_router
 from app.db.db_init import (
     create_database_if_not_exists,
     create_schema_if_not_exists,
@@ -36,6 +37,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(api_router, prefix="/api")
+app.include_router(ai_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Home"])
