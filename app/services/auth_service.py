@@ -25,7 +25,7 @@ from app.core.security import (
 from app.core.exceptions import RailMindException
 from app.tasks.notification_tasks import send_otp_email_impl
 from app.utils.logger import logger
-from app.core.constants import (
+from app.core.constants.auth_user import (
     UserRole,
     ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
@@ -583,25 +583,28 @@ class AuthService:
         }
 
     async def logout_user(
-    self,
-    current_user: dict,
-    response: Response,
-    redis: Redis,
-) -> dict:
+        self,
+        current_user: dict,
+        response: Response,
+        redis: Redis,
+    ) -> dict:
 
         user_id = current_user.get("sub")
-        jti     = current_user.get("jti")
-        exp     = current_user.get("exp")
+        jti = current_user.get("jti")
+        exp = current_user.get("exp")
 
         # ── 1. Blacklist access token JTI in Redis ────────────────────────────────
         if jti and exp:
             from datetime import datetime, timezone
+
             remaining = int(exp - datetime.now(timezone.utc).timestamp())
             if remaining > 0:
                 await redis.setex(f"blacklist:{jti}", remaining, "1")
                 logger.info(
                     "Access token blacklisted jti=%s ttl=%ss user_id=%s",
-                    jti, remaining, user_id,
+                    jti,
+                    remaining,
+                    user_id,
                 )
 
         # ── 2. Delete refresh token from Redis ────────────────────────────────────
@@ -623,7 +626,7 @@ class AuthService:
         )
         response.delete_cookie(
             key=REFRESH_TOKEN_COOKIE_NAME,
-            path=REFRESH_TOKEN_COOKIE_PATH,  
+            path=REFRESH_TOKEN_COOKIE_PATH,
         )
         response.delete_cookie(
             key=CSRF_TOKEN_COOKIE_NAME,
@@ -632,7 +635,7 @@ class AuthService:
 
         logger.info("User logged out successfully user_id=%s", user_id)
         return {"user_id": user_id}
-    
+
     @staticmethod
     def _set_auth_cookies(
         response: Response,

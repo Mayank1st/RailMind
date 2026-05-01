@@ -42,9 +42,7 @@ async def create_schema_if_not_exists():
     engine = create_async_engine(db_url)
 
     async with engine.connect() as conn:
-        await conn.execute(
-            text(f'CREATE SCHEMA IF NOT EXISTS "{settings.DB_SCHEMA}"')
-        )
+        await conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.DB_SCHEMA}"'))
         print(f'Schema "{settings.DB_SCHEMA}" ensured.')
 
     await engine.dispose()

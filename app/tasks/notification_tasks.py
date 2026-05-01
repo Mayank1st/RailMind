@@ -32,18 +32,22 @@ def send_otp_email_impl(user_name: str, email: str) -> int:
 def task_send_otp_email(self, user_name: str, email: str) -> int:
     logger.info(
         "Celery task task_send_otp_email started task_id=%s user_name=%s to=%s",
-        self.request.id, user_name, email,
+        self.request.id,
+        user_name,
+        email,
     )
     try:
         otp = send_otp_email_impl(user_name, email)
     except Exception:
         logger.exception(
             "Celery task task_send_otp_email failed task_id=%s to=%s",
-            self.request.id, email,
+            self.request.id,
+            email,
         )
         raise
     logger.info(
         "Celery task task_send_otp_email done task_id=%s to=%s",
-        self.request.id, email,
+        self.request.id,
+        email,
     )
     return otp

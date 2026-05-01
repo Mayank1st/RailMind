@@ -4,6 +4,176 @@ AI-Powered Railway Reservation System — IRCTC Replica with Intelligent Automat
 
 ---
 
+## Zaroori steps — sequence mein (Hinglish)
+
+*Neeche wale steps **order mein** follow karo; skip mat karo warna DB, email ya Celery break ho jayega.*
+
+### Step 1 — PostgreSQL chalu hona chahiye
+
+- Machine pe **PostgreSQL install** ho aur service **running** ho (default port `5432`).
+- Ek **empty database** bana lo (jaise `railmind_db`) — ya app first start pe DB create kar sakti hai, lekin Postgres server pehle se up hona chahiye.
+
+### Step 2 — Redis install + baad mein run
+
+- **Redis** install karo (macOS: `brew install redis`).
+- Abhi start mat karo; **Step 8 (Terminal A)** mein `redis-server` chalayenge.
+
+### Step 3 — Repo clone + project folder
+
+```bash
+git clone <your-repo-url>
+cd RailMind
+```
+
+### Step 4 — Virtual environment (venv)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate          # macOS / Linux
+# Windows: venv\Scripts\activate
+```
+
+*Har nayi terminal mein `source venv/bin/activate` dubara karna padega.*
+
+### Step 5 — Dependencies install
+
+```bash
+pip install -r requirements.txt
+```
+
+*Isme Alembic ke liye **psycopg**, app ke liye **asyncpg**, Celery + **redis** package sab aa jate hain.*
+
+### Step 6 — `.env` file (mandatory keys)
+
+- Project root mein **`.env`** banao (agar `.env.example` ho toh copy karke values bharo).
+- **`app/config.py`** jo keys maangta hai woh **exact names** se honi chahiye (`case_sensitive=True` hai).
+
+**Minimum jo set karni hi karni hain:**
+
+| Variable | Baat (Hinglish) |
+|----------|------------------|
+| `DB_USERNAME`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME` | Postgres connection |
+| `DB_SCHEMA` | Schema name, jaise `railmind_be` — tables isi schema mein banenge |
+| `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | Pool size, jaise `5` aur `10` |
+| `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASSWORD` | Gmail + **App Password** (normal password nahi) |
+| `EMAIL_SMTP_HOST` | `smtp.gmail.com` |
+| `JWT_SECRET_KEY` | Random long string |
+| `RAPIDAPI_KEY`, `RAPIDAPI_HOST` | RapidAPI config (project ke hisaab se) |
+
+**Strongly recommended:**
+
+```env
+REDIS_URL=redis://127.0.0.1:6379/0
+```
+
+*URL **hamesha** `redis://` se start honi chahiye — warna Celery galat broker (AMQP) use kar leta hai.*
+
+**Local dev jaldi test ke liye (Redis/Celery bina OTP bhejna):**
+
+```env
+CELERY_TASK_ALWAYS_EAGER=true
+```
+
+*Isse task API process ke andar hi run hoga; production mein `false` rakho.*
+
+> **Tip:** Agar dotenv “parse error” de toh `.env` mein `#` ya spaces wali lines ko **double quotes** mein band karo.
+
+### Step 7 — Database migrations (Alembic)
+
+Project root se (venv activated):
+
+```bash
+alembic upgrade head
+```
+
+*Ye **sync psycopg** se chalti hai — tables + `alembic_version` tumhare `DB_SCHEMA` mein create/update honge.*
+
+Check karne ke liye:
+
+```bash
+alembic current
+# output mein (head) revision dikhna chahiye
+```
+
+### Step 8 — Ab 3 cheezein parallel (3 terminals)
+
+**Terminal A — Redis**
+
+```bash
+source venv/bin/activate   # optional, redis-cli ke liye
+redis-server
+```
+
+Verify:
+
+```bash
+redis-cli ping    # PONG aana chahiye
+```
+
+**Terminal B — Celery worker** *(skip only if `CELERY_TASK_ALWAYS_EAGER=true`)*
+
+```bash
+cd /path/to/RailMind
+source venv/bin/activate
+celery -A app.tasks.celery_app:celery_app worker -l info
+```
+
+*Nahi chalayoge toh `.delay()` wale tasks queue mein padenge — OTP email worker ke bina process nahi honge.*
+
+**Terminal C — API server**
+
+```bash
+cd /path/to/RailMind
+source venv/bin/activate
+fastapi dev app/main.py
+# ya: uvicorn app.main:app --reload
+```
+
+- API: `http://127.0.0.1:8000`
+- Docs: `http://127.0.0.1:8000/docs`
+
+### Step 9 — Quick sanity check
+
+- `GET /` — app up
+- `GET /db-test` — DB connected
+- Register flow — logs mein `[railmind]` email / Celery lines dekho
+
+---
+
+## Full setup checklist (English, in order)
+
+1. **Install tools:** Python 3.11+, PostgreSQL (running), Redis (install; start later), Git.
+2. **Clone & enter repo:** `git clone <url> && cd RailMind`
+3. **Virtualenv:** `python3 -m venv venv` → `source venv/bin/activate` (Windows: `venv\Scripts\activate`)
+4. **Dependencies:** `pip install -r requirements.txt`
+5. **Create `.env` in project root** with the variables your app needs (names are **case-sensitive**, match `app/config.py`):
+
+   | Required in `.env` |
+   |-------------------|
+   | `DB_USERNAME`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_SCHEMA`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` |
+   | `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASSWORD`, `EMAIL_SMTP_HOST` |
+   | `JWT_SECRET_KEY` |
+   | `RAPIDAPI_KEY`, `RAPIDAPI_HOST` |
+
+   **Recommended:** `REDIS_URL=redis://127.0.0.1:6379/0` (must start with `redis://`).  
+   **Optional:** `MAIL_FROM`, `CELERY_TASK_ALWAYS_EAGER=true` for local email without a worker, `ECHO=true` for SQL logging.
+
+6. **PostgreSQL:** Ensure the server is up; create an empty database with the name in `DB_NAME` if you do not rely on app auto-create.
+7. **Migrations (from repo root, venv on):** `alembic upgrade head`  
+   - Check: `alembic current` (should show `head`).  
+   - **Not** a valid command: `alembic head` — use `alembic heads` or `alembic current`.
+8. **Terminal 1 — Redis:** `redis-server` → verify `redis-cli ping` → `PONG`
+9. **Terminal 2 — Celery** *(skip if `CELERY_TASK_ALWAYS_EAGER=true`):*  
+   `celery -A app.tasks.celery_app:celery_app worker -l info`
+10. **Terminal 3 — API:** `fastapi dev app/main.py` or `uvicorn app.main:app --reload`
+11. **Open:** `http://127.0.0.1:8000/docs`
+12. **Smoke test:** `GET /`, `GET /db-test`, try register; watch logs for `[railmind]` / Celery.
+
+**New migration (after model changes):**  
+`alembic revision --autogenerate -m "message"` → **open the file** → remove junk (e.g. fake ENUM `alter_column`, `drop_table('alembic_version')`, random index renames) → then `alembic upgrade head`.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -28,148 +198,56 @@ Make sure you have the following installed before starting:
 
 ---
 
-## Project Setup
+## Project Setup (English quick reference)
 
-### 1. Clone the repository
+Full **sequence** upar **“Zaroori steps (Hinglish)”** section mein hai. Short version:
 
-```bash
-git clone https://github.com/your-org/railmind.git
-cd railmind
-```
+1. Postgres + Redis installed  
+2. `venv` → `pip install -r requirements.txt`  
+3. `.env` — see `app/config.py` for exact variable names  
+4. `alembic upgrade head`  
+5. Three terminals: `redis-server` → `celery -A app.tasks.celery_app:celery_app worker -l info` → `fastapi dev app/main.py` (or `uvicorn app.main:app --reload`)
 
-### 2. Create and activate a virtual environment
-
-```bash
-python -m venv venv
-
-# macOS / Linux
-source venv/bin/activate
-
-# Windows
-venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-pip install celery[redis]   # Redis transport for Celery
-```
-
-### 4. Set up environment variables
-
-Copy the example env file and fill in your values:
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and configure:
+### `.env` example shape *(values apni machine ke hisaab se)*
 
 ```env
-# Application
-APP_NAME=RailMind
-ENVIRONMENT=development
-DEBUG=True
+DB_USERNAME=postgres
+DB_PASSWORD=yourpassword
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_NAME=railmind_db
+DB_SCHEMA=railmind_be
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=10
 
-# Database
-DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/railmind_db
+JWT_SECRET_KEY=change-me-long-random-string
 
-# Redis (must start with redis://)
-REDIS_URL=redis://127.0.0.1:6379/0
-
-# Auth
-JWT_SECRET_KEY=your-secret-key-here
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
-
-# Email (Gmail SMTP)
 EMAIL_SMTP_HOST=smtp.gmail.com
-EMAIL_SMTP_USER=yourgmail@gmail.com
-EMAIL_SMTP_PASSWORD=xxxx xxxx xxxx xxxx   # Gmail App Password (not your login password)
+EMAIL_SMTP_USER=you@gmail.com
+EMAIL_SMTP_PASSWORD=your-gmail-app-password
+MAIL_FROM=you@gmail.com
 
-# Celery
-CELERY_TASK_ALWAYS_EAGER=False   # Set True only for testing (bypasses Redis)
+REDIS_URL=redis://127.0.0.1:6379/0
+CELERY_TASK_ALWAYS_EAGER=false
 
-# AI (Phase 2+)
-OPENAI_API_KEY=
-HUGGINGFACE_API_KEY=
-
-# Payment (Phase 1)
-RAZORPAY_KEY_ID=
-RAZORPAY_KEY_SECRET=
+RAPIDAPI_KEY=your-key
+RAPIDAPI_HOST=your-host
 ```
 
-> **Gmail App Password:** Go to [myaccount.google.com](https://myaccount.google.com) → Security → 2-Step Verification → App Passwords → Generate one for "Mail".
+> **Gmail App Password:** [Google Account → Security → App passwords](https://myaccount.google.com/security)
 
 ---
 
-## Running the Project
-
-You need **3 separate terminals** running simultaneously.
-
-### Terminal 1 — Start Redis
+## Database Migrations (Alembic)
 
 ```bash
-redis-server
+alembic upgrade head          # apply all pending
+alembic current               # show current revision
+alembic revision --autogenerate -m "message"   # then manually review the file!
+alembic downgrade -1          # rollback one step
 ```
 
-Verify Redis is running:
-
-```bash
-redis-cli ping
-# Expected output: PONG
-```
-
-### Terminal 2 — Start Celery Worker
-
-```bash
-celery -A app.tasks.celery_app:celery_app worker --loglevel=info
-```
-
-When Celery starts correctly, you will see your registered tasks listed:
-
-```
-[tasks]
-  . task_send_otp_email
-  . task_send_booking_confirmation
-  . task_process_refund
-
-[2026-04-04 ...] celery@your-machine ready.
-```
-
-> The Celery worker **must be running** for background tasks like OTP emails to be processed. Tasks are queued into Redis by FastAPI and consumed by this worker.
-
-### Terminal 3 — Start FastAPI
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The API will be available at:
-
-```
-http://localhost:8000
-API Docs: http://localhost:8000/docs
-Redoc:    http://localhost:8000/redoc
-```
-
----
-
-## Database Migrations
-
-Run Alembic migrations to set up the database schema:
-
-```bash
-# Run all pending migrations
-alembic upgrade head
-
-# Create a new migration (after model changes)
-alembic revision --autogenerate -m "describe your change"
-
-# Rollback one migration
-alembic downgrade -1
-```
+*Migrations **psycopg** (sync) use karti hain; runtime app **asyncpg** use karti hai — dono `requirements.txt` mein hain.*
 
 ---
 
@@ -291,3 +369,18 @@ Redis is not running. Start it with `redis-server` in Terminal 1.
 ---
 
 *RailMind — Internal Codename. Database: `railmind_db`*
+
+
+# Dry run — parse only, no DB writes
+python scripts/seed_train_data.py --csv data/Train_details_22122017.csv --dry-run
+
+# Full seed / upsert
+python scripts/seed_train_data.py --csv data/Train_details_22122017.csv
+
+# Custom batch size
+python scripts/seed_train_data.py --csv data/Train_details_22122017.csv --batch-size 1000
+
+
+
+# To Check The Folder Structure 
+tree -L 2 -I '__pycache__|venv'

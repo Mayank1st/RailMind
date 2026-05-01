@@ -195,6 +195,4 @@ def downgrade() -> None:
     op.drop_table("users", schema=schema)
 
     for enum_name in ("kyc_status_enum", "marital_status_enum", "gender_enum"):
-        op.execute(
-            sa.text(f'DROP TYPE IF EXISTS "{schema}"."{enum_name}" CASCADE')
-        )
+        op.execute(sa.text(f'DROP TYPE IF EXISTS "{schema}"."{enum_name}" CASCADE'))

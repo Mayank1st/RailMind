@@ -4,7 +4,6 @@ from app.api.v1.endpoints import (
     admin,
     auth,
     booking,
-    cancellation,
     complaint,
     fare,
     health,
@@ -25,7 +24,6 @@ router.include_router(train.router)
 router.include_router(passenger.router)
 router.include_router(payment.router)
 router.include_router(pnr.router)
-router.include_router(cancellation.router)
 router.include_router(notification.router)
 router.include_router(waitlist.router)
 router.include_router(fare.router)

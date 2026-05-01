@@ -32,27 +32,43 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:3000"
 
     # SMTP CONFIGURATION
-    EMAIL_SMTP_USER : str 
-    EMAIL_SMTP_PASSWORD : str 
-    MAIL_FROM : str = "noreply@railmind.in"
-    MAIL_PORT : str = 587
-    EMAIL_SMTP_HOST :str
-    MAIL_STARTTLS : bool = True
-    MAIL_SSL_TLS : bool = False
+    EMAIL_SMTP_USER: str
+    EMAIL_SMTP_PASSWORD: str
+    MAIL_FROM: str = "noreply@railmind.in"
+    MAIL_PORT: str = 587
+    EMAIL_SMTP_HOST: str
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
 
     # REDIS / CELERY
     REDIS_URL: str = "redis://127.0.0.1:6379/0"
     CELERY_TASK_ALWAYS_EAGER: bool = False
 
     # HMAC SECRET KEY
-    HMAC_SECRET_KEY :str = "KYC_HMAC_SECRET"
+    HMAC_SECRET_KEY: str = "KYC_HMAC_SECRET"
 
-    # JWT 
-    JWT_SECRET_KEY : str
+    # JWT
+    JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # RAPID API
+    RAPIDAPI_KEY: str
+    RAPIDAPI_HOST: str
+
+    # GEMINI API
+    GEMINI_API_KEY: str
+    GEMINI_API_KEY_NAME: str
+    GEMINI_API_PROJECT_NAME: str
+    GEMINI_API_PROJECT_NUMBER: str
+    GEMINI_TEMPERATURE: float = 0.2
+    GEMINI_MAX_OUTPUT_TOKENS: int = 2048
+
+    # SUPABASE
+    SUPABASE_URL: str
+    SUPABASE_KEY: str
+    SUPABASE_TICKET_BUCKET: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,11 +1,15 @@
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants import Gender, KycStatus, MaritalStatus, UserRole
+from app.core.constants.auth_user import Gender, KycStatus, MaritalStatus, UserRole
 from app.db.base import BaseModel, DB_SCHEMA
+
+if TYPE_CHECKING:
+    from app.db.models.user_behavior_logs import UserBehaviorLogs
 
 
 class Users(BaseModel):
@@ -53,6 +57,18 @@ class Users(BaseModel):
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
+    )
+
+    passengers = relationship(
+        "Passengers",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    behavior_logs: Mapped[list["UserBehaviorLogs"]] = relationship(
+        "UserBehaviorLogs",
+        back_populates="user",
+        lazy="noload",
     )
 
 

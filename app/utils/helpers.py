@@ -1,13 +1,10 @@
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
+import pytz
 
 
 def get_utc_timezone():
-    """UTC wall time as naive datetime.
+    return datetime.now(timezone.utc)
 
-    PostgreSQL columns use ``TIMESTAMP WITHOUT TIME ZONE``; asyncpg rejects
-    mixing those with timezone-aware ``datetime`` values.
-    """
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def analyze_age_using_dob(dob: date):
     today = date.today()
@@ -17,3 +14,30 @@ def analyze_age_using_dob(dob: date):
         age -= 1
 
     return age
+
+
+def get_time_after_hours(hours: int) -> str:
+    ist = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(ist)
+    future_time = now + timedelta(hours=hours)
+    return future_time.strftime("%H:%M:%S")
+
+
+def parse_datetime_flexible(value: str) -> datetime:
+
+    value = value.strip()
+    formats = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%d-%m-%Y %H:%M:%S",
+        "%d-%m-%Y",
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+
+    raise ValueError(f"Unsupported datetime format: {value}")

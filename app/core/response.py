@@ -11,23 +11,26 @@ T = TypeVar("T")
 
 # ─── Error Detail ─────────────────────────────────────────────────────────────
 
+
 class ErrorDetail(BaseModel):
-    code: str          # RM-{DOMAIN}-{NUMBER} e.g. "RM-AUTH-001"
-    field: Optional[str] = None   # populated for validation errors
+    code: str  # RM-{DOMAIN}-{NUMBER} e.g. "RM-AUTH-001"
+    field: Optional[str] = None  # populated for validation errors
     message: str
 
 
 # ─── Core Envelope ────────────────────────────────────────────────────────────
+
 
 class APIResponse(BaseModel, Generic[T]):
     success: bool
     message: str
     data: Optional[T] = None
     errors: Optional[list[ErrorDetail]] = None
-    meta: Optional[dict] = None   # caller-controlled: pagination, ai_confidence, etc.
+    meta: Optional[dict] = None  # caller-controlled: pagination, ai_confidence, etc.
 
 
 # ─── Success Factories ────────────────────────────────────────────────────────
+
 
 def ok(
     data: Any = None,
@@ -43,6 +46,7 @@ def created(data: Any = None, *, message: str = "Created successfully") -> APIRe
 
 
 # ─── Error Factories ──────────────────────────────────────────────────────────
+
 
 def error(
     message: str,
@@ -71,6 +75,7 @@ def validation_error(pydantic_errors: list[dict]) -> APIResponse:
 
 
 # ─── JSONResponse helper (for exception handlers only) ───────────────────────
+
 
 def json_error(message: str, *, status_code: int, code: str) -> JSONResponse:
     body = error(message, code=code)

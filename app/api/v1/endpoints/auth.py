@@ -11,7 +11,7 @@ from app.schemas.auth import (
 )
 from app.services.auth_service import AuthService
 from app.core.response import APIResponse, created, ok
-from app.core.constants import REFRESH_TOKEN_COOKIE_NAME
+from app.core.constants.auth_user import REFRESH_TOKEN_COOKIE_NAME
 from app.core.exceptions import RailMindException
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -44,7 +44,7 @@ async def login_user(
 async def send_otp(
     payload: SendOtpDTO,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),  # ✅ was missing
+    redis: Redis = Depends(get_redis),
 ):
     data = await auth_service.send_otp(payload.email, db, redis)
     return created(data=data, message="OTP sent successfully. Valid for 10 minutes.")

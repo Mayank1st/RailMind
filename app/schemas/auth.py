@@ -3,9 +3,9 @@ from datetime import date
 from typing import Annotated, Optional
 
 from pydantic import EmailStr, Field, field_validator, model_validator
-from app.core.constants import UserRole
+from app.core.constants.auth_user import UserRole
 
-from app.core.constants import (
+from app.core.constants.auth_user import (
     AllOccupations,
     Gender,
     MaritalStatus,

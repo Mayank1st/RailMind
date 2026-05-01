@@ -24,10 +24,10 @@ class BaseModel(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=get_utc_timezone, nullable=False
+        DateTime(timezone=True), default=get_utc_timezone, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         default=get_utc_timezone,
         onupdate=get_utc_timezone,
         nullable=False,
@@ -35,6 +35,9 @@ class BaseModel(Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
+
+    def to_dict(self) -> dict:
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
 
 DB_SCHEMA = settings.DB_SCHEMA

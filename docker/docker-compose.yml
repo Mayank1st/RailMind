@@ -1,7 +1,150 @@
-# services:
-#   api:
-#     build:
-#       context: ..
-#       dockerfile: docker/Dockerfile
-#     ports:
-#       - "8000:8000"
+# ════════════════════════════════════════════════════════════════════════════════
+# RailMind - Docker Compose Configuration
+# Local development stack: FastAPI + PostgreSQL + Redis + Celery
+# ════════════════════════════════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: railmind_postgres
+    environment:
+      POSTGRES_USER: railmind
+      POSTGRES_PASSWORD: railmind_dev_pass
+      POSTGRES_DB: railmind_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U railmind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - railmind_network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Redis Cache & Session Store
+  # ─────────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: railmind_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - railmind_network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # FastAPI Backend Application
+  # ─────────────────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: railmind_backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://railmind:railmind_dev_pass@postgres:5432/railmind_db
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      
+      # App Config
+      DEBUG: "True"
+      ENVIRONMENT: development
+      
+      # JWT (use strong secrets in production)
+      JWT_SECRET_KEY: dev_secret_key_change_in_production
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      
+      # Email (fill these from your Gmail setup)
+      EMAIL_SMTP_HOST: smtp.gmail.com
+      EMAIL_SMTP_PORT: 587
+      EMAIL_USERNAME: ${EMAIL_USERNAME}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      EMAIL_FROM_NAME: RailMind
+      EMAIL_USE_TLS: "True"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Mount source code for development (optional - comment out for prod-like testing)
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+    networks:
+      - railmind_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Celery Worker (for background tasks)
+  # ─────────────────────────────────────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: railmind_celery_worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://railmind:railmind_dev_pass@postgres:5432/railmind_db
+      REDIS_URL: redis://redis:6379/0
+      EMAIL_SMTP_HOST: smtp.gmail.com
+      EMAIL_SMTP_PORT: 587
+      EMAIL_USERNAME: ${EMAIL_USERNAME}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ./app:/app/app
+    networks:
+      - railmind_network
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Celery Beat (for scheduled tasks - Phase 2+)
+  # ─────────────────────────────────────────────────────────────────────────────
+  # celery_beat:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: railmind_celery_beat
+  #   environment:
+  #     REDIS_URL: redis://redis:6379/0
+  #   depends_on:
+  #     - redis
+  #   networks:
+  #     - railmind_network
+  #   command: celery -A app.tasks.celery_app beat --loglevel=info
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Named Volumes for Data Persistence
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Custom Network
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  railmind_network:
+    driver: bridge
