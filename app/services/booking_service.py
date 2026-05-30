@@ -10,9 +10,10 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from datetime import date
 
 from app.core.constants.train import Quota
-from app.core.constants.booking import PassengerStatus, BookingStatus
+from app.core.constants.booking import PassengerStatus, BookingStatus, JourneyActionType
 from app.core.exceptions import RailMindException
 from app.db.models.booking import BookingPassengers, Bookings, RACSlots
 from app.db.models.train import SeatInventories
@@ -169,7 +170,12 @@ class BookingService:
     async def list_user_bookings(self, current_user_id, db: AsyncSession) -> dict:
         result = await db.execute(
             select(Bookings)
-            .options(selectinload(Bookings.user))
+            .options(
+                selectinload(Bookings.user),
+                selectinload(Bookings.train),
+                selectinload(Bookings.source_station),
+                selectinload(Bookings.destination_station),
+            )
             .where(Bookings.user_id == current_user_id)
         )
         user_list = result.scalars().all()
@@ -185,6 +191,10 @@ class BookingService:
             {
                 "booking_id": booking.id,
                 "train_id": booking.train_id,
+                "train_number": booking.train.train_number,
+                "train_name": booking.train.train_name,
+                "source_station": booking.source_station.station_code,
+                "destination_station": booking.destination_station.station_code,
                 "user_id": booking.user_id,
                 "user_name": booking.user.username,
                 "pnr_number": booking.pnr_number,
@@ -510,6 +520,40 @@ class BookingService:
         )
 
         return public_url
+
+    async def upcoming_and_past_journey_details(
+        self,
+        action,
+        current_user_id: str,
+        db: AsyncSession,
+    ) -> dict:
+
+        booking_list = await self.list_user_bookings(
+            current_user_id=current_user_id,
+            db=db,
+        )
+
+        today = date.today()
+
+        if action == JourneyActionType.UPCOMING:
+
+            journey_result = [
+                booking for booking in booking_list if booking["journey_date"] >= today
+            ]
+
+        elif action == JourneyActionType.PAST:
+
+            journey_result = [
+                booking for booking in booking_list if booking["journey_date"] < today
+            ]
+
+        else:
+            journey_result = []
+
+        return {
+            "count": len(journey_result),
+            "journeys": journey_result,
+        }
 
     # ── Private helpers ───────────────────────────────────────────────────────
 

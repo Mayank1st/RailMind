@@ -119,3 +119,8 @@ RAC_BERTHS_PER_COACH: dict[str, int] = {
     "FC": 0,  # First class — no RAC
     "3E": 2,  # Economy AC 3-tier — 2 berths → 4 RAC passenger slots
 }
+
+
+class JourneyActionType(str, Enum):
+    UPCOMING = "UPCOMING"
+    PAST = "PAST"

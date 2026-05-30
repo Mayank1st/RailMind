@@ -3,7 +3,7 @@ import logger
 from fastapi import status
 from typing import Optional
 from sqlalchemy.orm import aliased, selectinload
-from sqlalchemy import and_, select, or_, null
+from sqlalchemy import and_, select, or_, null, exists
 from app.db.models.train import (
     Trains,
     TrainStations,
@@ -24,7 +24,6 @@ from app.schemas.Response.trainResponseDTO import (
     CoachWiseSeatAvailabilityResponse,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.integrations.rapidapi import rapidapi_client
 from app.core.exceptions import RailMindException
 from app.core.constants.booking import PassengerStatus
 
@@ -39,29 +38,37 @@ class TrainService:
         db: AsyncSession,
     ) -> dict:
         try:
-            # ── 1. Search local DB first ──────────────────────────────────────────
+            # ── 1. Aliases ───────────────────────────────────────────────────
             TS1 = aliased(TrainStations)
             S1 = aliased(Stations)
             TS2 = aliased(TrainStations)
             S2 = aliased(Stations)
 
-            # ── 2. Build time window filter ───────────────────────────────────────
+            # ── 2. Time window filter ────────────────────────────────────────
             ist = pytz.timezone("Asia/Kolkata")
             now = datetime.now(ist)
-            from_time = now.strftime("%H:%M:%S")
-            to_time = get_time_after_hours(payload.hours)
 
-            # Handle overnight wrap-around (e.g., 23:00:00 to 03:00:00)
-            if from_time <= to_time:
-                time_filter = and_(
-                    TS1.departure_time >= from_time, TS1.departure_time <= to_time
-                )
+            if payload.hours >= 24:
+                # 24+ hours = poora din, no time filter
+                time_filter = True
+                from_time = "all_day"
+                to_time = "all_day"
             else:
-                time_filter = or_(
-                    TS1.departure_time >= from_time, TS1.departure_time <= to_time
-                )
+                from_time = now.strftime("%H:%M:%S")
+                to_time = get_time_after_hours(payload.hours)
 
-            # ── 3. Dynamic Query Construction ─────────────────────────────────────
+                if from_time <= to_time:
+                    time_filter = and_(
+                        TS1.departure_time >= from_time,
+                        TS1.departure_time <= to_time,
+                    )
+                else:
+                    time_filter = or_(
+                        TS1.departure_time >= from_time,
+                        TS1.departure_time <= to_time,
+                    )
+
+            # ── 3. Select fields ─────────────────────────────────────────────
             select_fields = [
                 Trains.train_number,
                 Trains.train_name,
@@ -73,7 +80,6 @@ class TrainService:
                 TS1.sequence_number.label("from_seq"),
             ]
 
-            # Add conditional destination fields
             if payload.toStationCode:
                 select_fields.extend(
                     [
@@ -85,7 +91,6 @@ class TrainService:
                     ]
                 )
             else:
-                # Fill with nulls so row.to_code / row.arrives don't throw errors below
                 select_fields.extend(
                     [
                         null().label("to_code"),
@@ -96,7 +101,7 @@ class TrainService:
                     ]
                 )
 
-            # Start building statement
+            # ── 4. Build query ───────────────────────────────────────────────
             stmt = (
                 select(*select_fields)
                 .select_from(Trains)
@@ -108,10 +113,22 @@ class TrainService:
             conditions = [
                 S1.station_code == payload.fromStationCode.upper(),
                 Trains.is_active == True,
-                time_filter,
             ]
 
-            # Conditionally add destination joins and filters
+            # Time filter — sirf hours < 24 pe apply
+            if time_filter is not True:
+                conditions.append(time_filter)
+
+            # Train class filter — Coaches EXISTS
+            if payload.train_class:
+                coach_exists = (
+                    exists()
+                    .where(Coaches.train_id == Trains.id)
+                    .where(Coaches.train_class == payload.train_class)
+                )
+                conditions.append(coach_exists)
+
+            # Destination joins
             if payload.toStationCode:
                 stmt = stmt.join(TS2, TS2.train_id == Trains.id).join(
                     S2, S2.id == TS2.station_id
@@ -119,26 +136,23 @@ class TrainService:
                 conditions.append(S2.station_code == payload.toStationCode.upper())
                 conditions.append(TS1.sequence_number < TS2.sequence_number)
 
-            # Finalize statement
+            # Finalize
             stmt = stmt.where(and_(*conditions)).order_by(TS1.departure_time)
-
             result = await db.execute(stmt)
             rows = result.all()
 
-            # ── 4. Filter by today's running day ──────────────────────────────────
-            today = now.strftime("%a").lower()  # 'mon', 'tue' etc.
+            # ── 5. Filter by running day ─────────────────────────────────────
+            today = now.strftime("%a").lower()
 
             trains = []
             for row in rows:
                 runs_on_days = row.runs_on_days or []
 
-                # Special trains with empty runs_on_days — include with null flag
                 if not runs_on_days:
                     runs_today = None
                 else:
                     runs_today = today in runs_on_days
 
-                # Skip trains that definitively don't run today
                 if runs_today is False:
                     continue
 
@@ -159,34 +173,19 @@ class TrainService:
                     }
                 )
 
-            # ── 5. Return DB results if found ─────────────────────────────────────
-            if trains:
-                return {
-                    "source": "local_db",
-                    "total": len(trains),
-                    "from_time": from_time,
-                    "to_time": to_time,
-                    "trains": trains,
-                }
-
-            # ── 6. Fallback to RapidAPI if DB returns nothing ─────────────────────
-            rapidapi_data = await rapidapi_client(
-                payload.fromStationCode,
-                payload.toStationCode,
-                payload.hours,
-            )
-
+            # ── 6. Return ────────────────────────────────────────────────────
             return {
-                "source": "rapidapi",
-                "total": len(rapidapi_data.get("data", [])),
-                "trains": rapidapi_data,
+                "source": "local_db",
+                "total": len(trains),
+                "from_time": from_time,
+                "to_time": to_time,
+                "trains": trains,
             }
 
         except RailMindException:
             raise
 
         except Exception as e:
-            # traceback.print_exc()
             raise RailMindException(
                 code="RM-TRAIN-001",
                 message="Failed to fetch train data",
@@ -283,46 +282,69 @@ class TrainService:
                 train_number, payload=payload, db=db
             )
 
-            wl_type = self._determine_wl_type(
-                is_source=from_stop.is_source,
-                is_remote_location=from_stop.station.is_remote_location,
-                quota=payload.quota,
-            )
+            # ── Build query — saari classes fetch karo ──
+            conditions = [
+                SeatInventories.train_id == train_data.id,
+                SeatInventories.journey_date == payload.journey_date,
+            ]
+
+            # Agar quota aaya toh filter, nahi toh sab dikhao
+            if payload.quota:
+                conditions.append(SeatInventories.quota == payload.quota)
 
             inv_result = await db.execute(
-                select(SeatInventories).where(
-                    SeatInventories.train_id == train_data.id,
-                    SeatInventories.journey_date == payload.journey_date,
-                    SeatInventories.train_class == payload.train_class,
-                    SeatInventories.quota == payload.quota,
-                )
+                select(SeatInventories).where(and_(*conditions))
             )
-            inventory = inv_result.scalar_one_or_none()
+            inventories = inv_result.scalars().all()
 
-            if not inventory:
+            if not inventories:
                 raise RailMindException(
                     code="RM-TRN-004",
                     message="No availability data found for this train on the selected date",
                     status_code=status.HTTP_404_NOT_FOUND,
                 )
 
-            # ── Availability status decide karo ──────────────────────────────────
-            availability_status = inventory.booking_availability
+            # ── Har class ka data build karo ──
+            classes = []
+            for inv in inventories:
+                wl_type = self._determine_wl_type(
+                    is_source=from_stop.is_source,
+                    is_remote_location=from_stop.station.is_remote_location,
+                    quota=inv.quota,
+                )
+
+                # Status decide karo
+                if inv.available_confirmed_seats > 0:
+                    status_label = "AVL"
+                    count = inv.available_confirmed_seats
+                elif inv.available_rac_slots > 0:
+                    status_label = "RAC"
+                    count = inv.available_rac_slots
+                else:
+                    status_label = "WL"
+                    count = inv.next_wl_position
+
+                classes.append(
+                    {
+                        "class_code": inv.train_class,
+                        "quota": inv.quota,
+                        "status": status_label,
+                        "count": count,
+                        "available_seats": inv.available_confirmed_seats,
+                        "available_rac_slots": inv.available_rac_slots,
+                        "wl_count": inv.wl_count,
+                        "next_wl_position": inv.next_wl_position,
+                        "wl_type": wl_type,
+                    }
+                )
 
             return {
                 "train_number": train_data.train_number,
                 "train_name": train_data.train_name,
-                "journey_date": payload.journey_date,
+                "journey_date": str(payload.journey_date),
                 "from_station": payload.from_station,
                 "to_station": payload.to_station,
-                "train_class": payload.train_class,
-                "quota": payload.quota,
-                "availability_status": availability_status,
-                "available_seats": inventory.available_confirmed_seats,
-                "available_rac_slots": inventory.available_rac_slots,
-                "wl_count": inventory.wl_count,
-                "next_wl_position": inventory.next_wl_position,
-                "wl_type": wl_type,
+                "classes": classes,
             }
 
         except Exception as e:

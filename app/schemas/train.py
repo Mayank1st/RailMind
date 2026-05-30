@@ -14,13 +14,13 @@ class SearchTrainDTO(BaseDTO):
 
     fromStationCode: Annotated[
         str,
-        Field(min_length=3, max_length=5, examples=["DR"]),
+        Field(min_length=2, max_length=5, examples=["DR"]),
     ]
 
     toStationCode: Optional[
         Annotated[
             str,
-            Field(min_length=3, max_length=5, examples=["RNC"]),
+            Field(min_length=2, max_length=5, examples=["RNC"]),
         ]
     ] = None
 
@@ -34,6 +34,20 @@ class SearchTrainDTO(BaseDTO):
             description="Show trains departing/arriving in next X hours",
         ),
     ]
+
+    train_class: Optional[
+        Annotated[
+            TrainClass,
+            Field(examples=[TrainClass.SLEEPER]),
+        ]
+    ] = TrainClass.SLEEPER
+
+    quota: Optional[
+        Annotated[
+            Quota,
+            Field(examples=[Quota.GENERAL]),
+        ]
+    ] = Quota.GENERAL
 
 
 class CheckSeatAvailabilityDTO(BaseDTO):

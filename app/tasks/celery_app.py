@@ -40,6 +40,7 @@ def _register_task_modules() -> None:
     import app.tasks.notification_tasks  # noqa: F401
     import app.tasks.booking_tasks  # noqa: F401
     import app.tasks.ai_tasks  # noqa: F401
+    import app.tasks.booking_retry_tasks  # noqa: F401
 
 
 _register_task_modules()

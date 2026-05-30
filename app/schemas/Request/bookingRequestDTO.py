@@ -61,3 +61,25 @@ class CreateBookingDTO(BaseDTO):
             raise ValueError("Duplicate passengers not allowed in a single booking")
 
         return passengers
+
+
+class JourneyDTO(BaseDTO):
+    train_number: Optional[Annotated[str, Field(examples=["12951"])]] = None
+    journey_date: Annotated[date, Field(examples=["2026-05-01"])]
+    from_station: Annotated[str, Field(examples=["NDLS"])]
+    to_station: Annotated[str, Field(examples=["BCT"])]
+    train_class: Annotated[TrainClass, Field(examples=[TrainClass.SLEEPER])]
+    quota: Annotated[Quota, Field(default=Quota.GENERAL, examples=[Quota.GENERAL])]
+    passengers: Annotated[
+        list[PassengerBookingDTO],
+        Field(
+            min_length=1,
+            max_length=MAX_PASSENGERS_PER_BOOKING,
+            examples=[
+                {
+                    "passenger_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "berth_preference": "LOWER",
+                }
+            ],
+        ),
+    ]
