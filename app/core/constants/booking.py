@@ -38,6 +38,14 @@ class BookingStatus(str, Enum):
     CANCELLED = "cancelled"
     REFUND_PENDING = "refund_pending"
     REFUND_COMPLETED = "refund_completed"
+    PAYMENT_PENDING = "payment_pending"
+
+
+CANCELLED_BOOKING_STATUSES: list[str] = [
+    BookingStatus.CANCELLED.value,
+    BookingStatus.REFUND_PENDING.value,
+    BookingStatus.REFUND_COMPLETED.value,
+]
 
 
 class BerthPreference(str, Enum):
@@ -119,3 +127,17 @@ RAC_BERTHS_PER_COACH: dict[str, int] = {
     "FC": 0,  # First class — no RAC
     "3E": 2,  # Economy AC 3-tier — 2 berths → 4 RAC passenger slots
 }
+
+
+class JourneyActionType(str, Enum):
+    UPCOMING = "UPCOMING"
+    PAST = "PAST"
+
+
+class BookingJourneyFilter(str, Enum):
+    """Tab filter for the user's booking list (mutually exclusive)."""
+
+    UPCOMING = "UPCOMING"  # journey_date >= today AND not cancelled
+    COMPLETED = "COMPLETED"  # journey_date < today AND not cancelled
+    CANCELLED = "CANCELLED"  # booking_status in CANCELLED_BOOKING_STATUSES
+    ALL = "ALL"  # no filter

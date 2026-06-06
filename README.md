@@ -384,3 +384,6 @@ python scripts/seed_train_data.py --csv data/Train_details_22122017.csv --batch-
 
 # To Check The Folder Structure 
 tree -L 2 -I '__pycache__|venv'
+
+# To Initiate Celery Worker 
+celery -A app.tasks.celery_app worker --loglevel=info

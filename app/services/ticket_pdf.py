@@ -190,12 +190,16 @@ def generate_qr(data):
     return buf
 
 
-def build_ticket_pdf(ticket: dict, output_path: str):
+def build_ticket_pdf(ticket: dict, output_path: str | None = None) -> bytes:
+    """Render the e-ticket and return the PDF as raw bytes (in-memory).
+
+    `output_path` is optional/unused — the PDF is built on a BytesIO buffer so
+    callers can upload the bytes directly without touching disk.
+    """
     register_fonts()
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    # c = canvas.Canvas(output_path, pagesize=A4)
     c.setTitle("RailMind E-Ticket")
     c.setAuthor("RailMind")
 
@@ -213,7 +217,6 @@ def build_ticket_pdf(ticket: dict, output_path: str):
     # Logo — embed PNG image directly
     if LOGO_PATH.exists():
         logo_img = ImageReader(str(LOGO_PATH))
-        print("logo_img=====================>", logo_img)
         logo_h = header_h - 12  # 44pt with 6pt padding top+bottom
         logo_w = logo_h * 3.64  # maintain aspect ratio ≈ 160pt
         c.drawImage(
@@ -522,7 +525,9 @@ def build_ticket_pdf(ticket: dict, output_path: str):
         ("Base Fare", fare_breakdown.get("base_fare", 0.0)),
         ("Reservation Charge", fare_breakdown.get("reservation_charge", 0.0)),
         ("Superfast Charge", fare_breakdown.get("superfast_charge", 0.0)),
+        ("Tatkal Charge", fare_breakdown.get("tatkal_charge", 0.0)),
         ("GST (5%)", fare_breakdown.get("gst", 0.0)),
+        ("IRCTC Service Charge", fare_breakdown.get("irctc_service_charge", 0.0)),
         ("Travel Insurance", fare_breakdown.get("insurance", 0.0)),
     ]
 
@@ -664,8 +669,10 @@ def build_ticket_pdf(ticket: dict, output_path: str):
 
     c.save()
     return buffer.getvalue()
-    # print(f"PDF generated: {output_path}")
 
 
 if __name__ == "__main__":
-    build_ticket_pdf("railmind_eticket.pdf")
+    # Local test: sample `ticket` dict se PDF banao aur disk pe likho.
+    pdf = build_ticket_pdf(ticket)
+    Path("railmind_eticket.pdf").write_bytes(pdf)
+    print("PDF generated: railmind_eticket.pdf")

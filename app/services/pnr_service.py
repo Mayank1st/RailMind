@@ -19,6 +19,9 @@ class PnrService:
                 selectinload(Bookings.train),
                 selectinload(Bookings.source_station),
                 selectinload(Bookings.destination_station),
+                selectinload(Bookings.booking_passengers).selectinload(
+                    BookingPassengers.passenger
+                ),
                 selectinload(Bookings.booking_passengers)
                 .selectinload(BookingPassengers.seat)
                 .selectinload(Seats.coach),
@@ -77,6 +80,9 @@ class PnrService:
                 selectinload(Bookings.train),
                 selectinload(Bookings.source_station),
                 selectinload(Bookings.destination_station),
+                selectinload(Bookings.booking_passengers).selectinload(
+                    BookingPassengers.passenger
+                ),
                 selectinload(Bookings.booking_passengers)
                 .selectinload(BookingPassengers.seat)
                 .selectinload(Seats.coach),
@@ -88,6 +94,13 @@ class PnrService:
         )
         booking = result.scalar_one_or_none()
 
+        if not booking:
+            raise RailMindException(
+                code="RM-BKG-003",
+                message="PNR not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
         first_wl = next(
             (
                 bp.waitlist_entry
@@ -96,13 +109,6 @@ class PnrService:
             ),
             None,
         )
-
-        if not booking:
-            raise RailMindException(
-                code="RM-BKG-003",
-                message="PNR not found",
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
 
         return {
             "pnr_number": booking.pnr_number,
@@ -123,6 +129,9 @@ class PnrService:
             "destination_station_name": booking.destination_station.station_name,
             "passengers": [
                 {
+                    "passenger_name": bp.passenger.full_name.upper(),
+                    "passenger_age": bp.passenger.age,
+                    "passenger_gender": bp.passenger.gender,
                     "passenger_status": bp.passenger_status,
                     "allotted_berth": bp.allotted_berth,
                     "fare": bp.fare,

@@ -33,7 +33,9 @@ class AutoFillService:
     ) -> dict:
 
         # ── Step 1: Fetch all user bookings ───────────────────────────────────
-        booking_list = await booking_service.list_user_bookings(current_user_id, db=db)
+        booking_list = await booking_service.get_all_user_bookings(
+            current_user_id, db=db
+        )
         booking_ids = [b["booking_id"] for b in booking_list]
 
         # Fetch all booking details concurrently

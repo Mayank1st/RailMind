@@ -16,6 +16,8 @@ from app.core.exception_handlers import (
     unhandled_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi_pagination import add_pagination
 
 from app.dependencies import get_db
 from app.utils.helpers import get_utc_timezone
@@ -32,12 +34,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["X-CSRF-Token"],
+)
+
+
 app.add_exception_handler(RailMindException, railmind_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(api_router, prefix="/api")
 app.include_router(ai_router, prefix="/api/v1")
+
+# Enables fastapi-pagination across all routers (page/size resolution).
+add_pagination(app)
 
 
 @app.get("/", tags=["Home"])

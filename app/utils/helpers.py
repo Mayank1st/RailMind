@@ -1,5 +1,9 @@
-from datetime import datetime, timezone, date, timedelta
 import pytz
+import filetype
+
+from datetime import datetime, timezone, date, timedelta
+
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "application/pdf"}
 
 
 def get_utc_timezone():
@@ -41,3 +45,10 @@ def parse_datetime_flexible(value: str) -> datetime:
             continue
 
     raise ValueError(f"Unsupported datetime format: {value}")
+
+
+def get_content_type(file_bytes: bytes) -> str:
+    kind = filetype.guess(file_bytes)
+    if kind is None:
+        return "application/octet-stream"
+    return kind.mime

@@ -47,10 +47,13 @@ class Settings(BaseSettings):
     # HMAC SECRET KEY
     HMAC_SECRET_KEY: str = "KYC_HMAC_SECRET"
 
+    # FERNET ENCRYPTION KEY
+    KYC_ENCRYPTION_KEY: str
+
     # JWT
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 90
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # RAPID API
@@ -69,6 +72,21 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_KEY: str
     SUPABASE_TICKET_BUCKET: str
+    SUPABASE_IMAGE_BUCKET: str
+
+    # PAYMENT
+    PAYMENT_MODE: str = "mock"
+    MOCK_VALID_CREDIT_CARD: str
+    MOCK_VALID_DEBIT_CARD: str
+    MOCK_VALID_UPI_ID: str
+    MOCK_VALID_NETBANKING_USER: str
+    MOCK_VALID_NETBANKING_PASS: str
+    MOCK_VALID_CVV: str = "123"
+
+    # GOOGLE AUTH
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_PROVIDER: str = "google"
 
     model_config = SettingsConfigDict(
         env_file=".env",

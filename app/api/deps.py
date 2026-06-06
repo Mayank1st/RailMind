@@ -1,15 +1,22 @@
 from collections.abc import AsyncGenerator
+from typing import Callable
 
-from fastapi import Cookie, Depends, Header
+from fastapi import Cookie, Depends, Header, Request
 from jose import JWTError
 from redis.asyncio import Redis
 
 from app.config import settings
-from app.core.exceptions import RailMindException
+from app.core.exceptions import RailMindException, RateLimitExceededError
 from app.core.security import decode_access_token
 from app.db.session import get_db  # noqa: F401  re-exported for convenience
 
-__all__ = ["get_db", "get_redis", "get_current_user", "get_current_user_with_csrf"]
+__all__ = [
+    "get_db",
+    "get_redis",
+    "get_current_user",
+    "get_current_user_with_csrf",
+    "rate_limit",
+]
 
 
 # ─── Redis ────────────────────────────────────────────────────────────────────
@@ -25,6 +32,51 @@ async def get_redis() -> AsyncGenerator[Redis, None]:
         yield redis
     finally:
         await redis.aclose()
+
+
+# ─── Rate limiting ────────────────────────────────────────────────────────────
+
+
+def _client_ip(request: Request) -> str:
+    """
+    Best-effort client IP. Railway/Vercel sit behind proxies, so the real
+    client is in X-Forwarded-For (first hop); fall back to the socket peer.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def rate_limit(*, limit: int, window_seconds: int = 60, scope: str) -> Callable:
+    """
+    Redis-backed fixed-window per-IP rate limit, as a FastAPI dependency.
+
+    Each `scope` keeps its own counter, so limits don't bleed across endpoints.
+
+        @router.post(
+            "/x",
+            dependencies=[Depends(rate_limit(limit=10, scope="auth_x"))],
+        )
+    """
+
+    async def _enforce(
+        request: Request,
+        redis: Redis = Depends(get_redis),
+    ) -> None:
+        key = f"ratelimit:{scope}:{_client_ip(request)}"
+        count = await redis.incr(key)
+        if count == 1:
+            # first hit in this window — start the expiry clock
+            await redis.expire(key, window_seconds)
+        if count > limit:
+            ttl = await redis.ttl(key)
+            retry = ttl if ttl and ttl > 0 else window_seconds
+            raise RateLimitExceededError(
+                message=f"Too many requests. Please try again in {retry} seconds."
+            )
+
+    return _enforce
 
 
 # ─── Current User ─────────────────────────────────────────────────────────────

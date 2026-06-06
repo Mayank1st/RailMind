@@ -4,8 +4,9 @@ from fastapi import status
 
 from app.core.fare_calculator import FareCalculator, FareBreakdown
 from app.db.models.booking import FareRules
-from app.db.models.train import TrainStations
+from app.db.models.train import TrainStations, Stations
 from app.core.exceptions import RailMindException
+from app.integrations.supabase_client import upload_pdf_to_supabase
 
 
 class CommonService:
@@ -60,6 +61,14 @@ class CommonService:
             include_irctc_charge=include_irctc_charge,
             pt_multiplier=pt_multiplier,
         )
+
+    async def get_all_stations(self, db: AsyncSession) -> list[dict]:
+        result = await db.execute(select(Stations).order_by(Stations.station_code))
+        stations = result.scalars().all()
+        return [
+            {"station_code": station.station_code, "station_name": station.station_name}
+            for station in stations
+        ]
 
 
 common_service = CommonService()

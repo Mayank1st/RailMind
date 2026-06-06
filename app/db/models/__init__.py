@@ -5,3 +5,7 @@ from app.db.models.booking import *  # — Bookings, BookingPassengers, RACSlots
 from app.db.models.waiting_list import *  # — WaitlistEntries
 from app.db.models.passengers import *
 from app.db.models.user_behavior_logs import *
+from app.db.models.booking_retry_requests import *
+from app.db.models.payment import *
+from app.db.models.refund import *
+from app.db.models.user_oauth_accounts import *

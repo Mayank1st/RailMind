@@ -42,3 +42,9 @@ async def get_pnr_status(
         data=data,
         message=f"PNR Details fetched successfully.",
     )
+
+
+@router.get("/get-recently-checked-pnr")
+async def get_recently_checked_pnr(db: AsyncSession = Depends(get_db)):
+    # This route requires model training to identify recently checked PNRs
+    pass

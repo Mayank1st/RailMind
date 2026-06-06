@@ -1,0 +1,177 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaitable
+
+from app.tasks.celery_app import celery_app
+from celery.utils.log import get_task_logger
+
+logger = get_task_logger(__name__)
+_worker_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _run_in_worker_loop(coro: Awaitable[None]) -> None:
+    """Reuse one event loop per worker process to avoid asyncpg loop mismatch."""
+    global _worker_loop
+    if _worker_loop is None or _worker_loop.is_closed():
+        _worker_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_worker_loop)
+    _worker_loop.run_until_complete(coro)
+
+
+async def _async_retry_booking(retry_request_id: str) -> None:
+    from sqlalchemy import select
+
+    from app.db.session import async_session_local
+    from app.db.models.booking_retry_requests import BookingRetryRequest
+    from app.db.models.train import Trains, Stations
+    from app.services.booking_retry_service import BookingRetryService
+    from app.services.booking_service import BookingService
+    from app.core.constants.booking_retry_request import RetryFailureReason
+
+    retry_service = BookingRetryService()
+    booking_service = BookingService()
+
+    async with async_session_local() as db:
+
+        # ── Fetch retry request ───────────────────────────────────────────────
+        result = await db.execute(
+            select(BookingRetryRequest).where(
+                BookingRetryRequest.id == retry_request_id
+            )
+        )
+        retry_request = result.scalar_one_or_none()
+        if not retry_request:
+            logger.warning(
+                "Retry request not found. Skipping task. retry_request_id=%s",
+                retry_request_id,
+            )
+            return
+
+        payload = retry_request.original_payload
+        meta = payload.get("_meta", {})
+        user_id = str(retry_request.user_id)
+        logger.warning(
+            "Starting retry attempt. retry_request_id=%s attempt_count=%s",
+            retry_request_id,
+            retry_request.attempt_count + 1,
+        )
+
+        success = False
+        new_booking_id = None
+
+        try:
+            if retry_request.failure_reason == RetryFailureReason.SEAT_UNAVAILABLE:
+
+                # ── Train + station codes fetch karo ──────────────────────────
+                train_result = await db.execute(
+                    select(Trains).where(Trains.id == meta["train_id"])
+                )
+                train = train_result.scalar_one_or_none()
+
+                src_result = await db.execute(
+                    select(Stations).where(Stations.id == meta["source_station_id"])
+                )
+                src = src_result.scalar_one_or_none()
+
+                dst_result = await db.execute(
+                    select(Stations).where(
+                        Stations.id == meta["destination_station_id"]
+                    )
+                )
+                dst = dst_result.scalar_one_or_none()
+
+                if not train or not src or not dst:
+                    raise Exception("Train or station data missing")
+
+                # ── CreateBookingDTO reconstruct karo ─────────────────────────
+                from app.schemas.Request.bookingRequestDTO import (
+                    CreateBookingDTO,
+                    PassengerBookingDTO,
+                )
+
+                booking_dto = CreateBookingDTO(
+                    train_number=train.train_number,
+                    journey_date=payload["journey_date"],
+                    from_station=src.station_code,
+                    to_station=dst.station_code,
+                    train_class=payload["train_class"],
+                    quota=payload["quota"],
+                    passengers=[
+                        PassengerBookingDTO(
+                            passenger_id=p["passenger_id"],
+                            berth_preference=p["berth_preference"],
+                        )
+                        for p in payload["passengers"]
+                    ],
+                )
+
+                # ── Booking attempt ───────────────────────────────────────────
+                new_booking = await booking_service.create_booking(
+                    payload=booking_dto,
+                    current_user_id=user_id,
+                    db=db,
+                )
+                success = True
+                new_booking_id = str(new_booking["booking_id"])
+
+            elif retry_request.failure_reason == RetryFailureReason.PAYMENT_TIMEOUT:
+                # Payment service banega tab wire karenge
+                success = False
+
+        except Exception as e:
+            import traceback
+
+            print("RETRY ERROR:", str(e))
+            traceback.print_exc()
+            success = False
+
+        # ── Update retry state — NO db.begin(), autobegin already active ─────
+        next_action = await retry_service.update_retry_attempt(
+            retry_request_id=retry_request_id,
+            success=success,
+            db=db,
+            success_booking_id=new_booking_id,
+        )
+        await db.commit()  # ← single commit at the end
+
+        # ── Handle next action ────────────────────────────────────────────────
+        action = next_action.get("action")
+        countdown = next_action.get("countdown", 30)
+        logger.warning(
+            "Retry action decided. retry_request_id=%s action=%s countdown=%s",
+            retry_request_id,
+            action,
+            countdown,
+        )
+
+        if action == "success":
+            from app.tasks.notification_tasks import task_send_retry_success_email
+
+            task_send_retry_success_email.delay(
+                user_id=user_id,
+                booking_id=new_booking_id,
+            )
+
+        elif action in ("retry_immediate", "retry_scheduled"):
+            task_auto_retry_booking.apply_async(
+                args=[retry_request_id],
+                countdown=countdown,
+            )
+
+        elif action == "exhausted":
+            from app.tasks.notification_tasks import task_send_retry_exhausted_email
+
+            task_send_retry_exhausted_email.delay(
+                user_id=user_id,
+                booking_id=meta.get("original_booking_id"),
+            )
+
+
+@celery_app.task(
+    name="booking_tasks.task_auto_retry_booking",
+    bind=True,
+    max_retries=0,  # Manual retry logic upar hai
+)
+def task_auto_retry_booking(self, retry_request_id: str) -> None:
+    _run_in_worker_loop(_async_retry_booking(retry_request_id))
