@@ -64,7 +64,7 @@ EXPOSE 8000
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/api/health-check/health-check-status || exit 1
+    CMD curl -f http://localhost:${PORT}/api/v1/health-check/health-check-status || exit 1
 
 # Run FastAPI with uvicorn
 # Cloud Run will use PORT env var, fallback to 8000

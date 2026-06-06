@@ -19,6 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # ── Fresh-DB safety: drop old versions if they exist ─────────────────────
+    op.execute(
+        "ALTER TABLE railmind_be.booking_passengers "
+        "DROP CONSTRAINT IF EXISTS fk_booking_passengers_passenger_id"
+    )
+    op.execute("DROP TABLE IF EXISTS railmind_be.passengers CASCADE")
+    op.execute("DROP TABLE IF EXISTS railmind_be.fare_rules CASCADE")
     # ── fare_rules ────────────────────────────────────────────────────────────
     op.create_table(
         "fare_rules",
