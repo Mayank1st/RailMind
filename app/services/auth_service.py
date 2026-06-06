@@ -5,9 +5,10 @@ from jose import JWTError
 
 
 from sqlalchemy.orm import joinedload
+from pathlib import Path
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Response
+from fastapi import Response, status
 
 from app.db.models.user import (
     UserContacts,
@@ -20,9 +21,16 @@ from app.schemas.auth import ContactDetails, LoginRequest
 from app.core.security import (
     COMMON_PASSWORD_SET,
     encode_sensistive_data,
-    hmac_kyc,
+    encrypt_kyc,
+    decrypt_kyc,
+    mask_kyc,
+)
+from app.integrations.supabase_client import (
+    upload_image_to_supabase,
+    get_supabase_client,
 )
 from app.core.exceptions import RailMindException
+from app.core.exceptions import ProviderMismatchError
 from app.tasks.notification_tasks import send_otp_email_impl
 from app.utils.logger import logger
 from app.core.constants.auth_user import (
@@ -144,9 +152,9 @@ class AuthService:
 
         # ── 5. KYC uniqueness ─────────────────────────────────────────────────
         aadhaar_hmac = (
-            hmac_kyc(payload.aadhaar_number) if payload.aadhaar_number else None
+            encrypt_kyc(payload.aadhaar_number) if payload.aadhaar_number else None
         )
-        pan_hmac = hmac_kyc(payload.pan_number) if payload.pan_number else None
+        pan_hmac = encrypt_kyc(payload.pan_number) if payload.pan_number else None
 
         kyc_conditions = []
         if aadhaar_hmac:
@@ -242,7 +250,7 @@ class AuthService:
         redis: Redis,
     ) -> dict:
 
-        # ── 1. Find user ──────────────────────────────────────────────────────
+        # ── 1. Find user ──
         result = await db.execute(
             select(Users).where(
                 or_(Users.email == payload.email, Users.username == payload.username)
@@ -257,7 +265,11 @@ class AuthService:
                 status_code=404,
             )
 
-        # ── 2. Verify password ────────────────────────────────────────────────
+        # ── 2. Google-only account? password login allowed nahi ──
+        if user.password is None:
+            raise ProviderMismatchError()  # RM-AUTH-006
+
+        # ── 3. Verify password ──
         if not verify_encoded_data(payload.password, user.password):
             raise RailMindException(
                 code="RM-AUTH-002",
@@ -265,7 +277,7 @@ class AuthService:
                 status_code=401,
             )
 
-        # ── 3. Check email verified ───────────────────────────────────────────
+        # ── 4. Check email verified ──
         if not user.is_email_verified:
             raise RailMindException(
                 code="RM-AUTH-003",
@@ -273,44 +285,8 @@ class AuthService:
                 status_code=403,
             )
 
-        # ── 4. Check account active ───────────────────────────────────────────
-        if not user.is_active:
-            raise RailMindException(
-                code="RM-AUTH-004",
-                message="Account is disabled. Please contact support",
-                status_code=403,
-            )
-
-        # ── 5. Create tokens ──────────────────────────────────────────────────
-        access_token, jti = create_access_token(
-            user_id=str(user.id),
-            username=user.username,
-            role=user.role,
-        )
-        refresh_token, _ = create_refresh_token(user_id=str(user.id))
-        csrf_token = generate_csrf_token()
-
-        # ── 6. Store refresh token hash in Redis ──────────────────────────────
-        await redis.setex(
-            f"refresh_token:{user.id}",
-            settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-            hash_token(refresh_token),
-        )
-
-        # ── 7. Set cookies ────────────────────────────────────────────────────
-        AuthService._set_auth_cookies(
-            response=response,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            csrf_token=csrf_token,
-        )
-
-        return {
-            "id": str(user.id),
-            "email": user.email,
-            "username": user.username,
-            "role": user.role,
-        }
+        # ── 5. Issue session (tokens + Redis + cookies) ──
+        return await self.issue_session(user, response, redis)
 
     async def send_otp(
         self,
@@ -541,6 +517,7 @@ class AuthService:
                 joinedload(Users.user_profile),
                 joinedload(Users.user_contact),
                 joinedload(Users.user_kyc),
+                joinedload(Users.user_oauth_accounts),
             )
             .where(Users.id == user_id)
         )
@@ -558,6 +535,19 @@ class AuthService:
         contact = user.user_contact
         kyc = user.user_kyc
 
+        masked_aadhaar_number = None
+        masked_pan_number = None
+        if kyc:
+            if kyc.aadhaar_number:
+                masked_aadhaar_number = mask_kyc(decrypt_kyc(kyc.aadhaar_number))
+            if kyc.pan_number:
+                masked_pan_number = mask_kyc(decrypt_kyc(kyc.pan_number))
+
+        google_photo = next(
+            (oa.picture_url for oa in user.user_oauth_accounts or [] if oa.picture_url),
+            None,
+        )
+
         return {
             "id": str(user.id),
             "username": user.username,
@@ -566,6 +556,8 @@ class AuthService:
             "is_email_verified": user.is_email_verified,
             "is_mobile_verified": user.is_mobile_verified,
             "preferred_language": user.preferred_language,
+            "profile_photo": (profile.profile_photo if profile else None)
+            or google_photo,
             "first_name": profile.first_name if profile else None,
             "last_name": profile.last_name if profile else None,
             "gender": profile.gender if profile else None,
@@ -579,7 +571,200 @@ class AuthService:
             "state": contact.state if contact else None,
             "pin_code": contact.pin_code if contact else None,
             "country": contact.country if contact else None,
+            "pan_number": masked_pan_number,
+            "adhaar_number": masked_aadhaar_number,
             "kyc_status": kyc.kyc_status if kyc else None,
+        }
+
+    async def update_current_user_profile(
+        self,
+        current_user: dict,
+        payload,
+        db: AsyncSession,
+    ) -> dict:
+        user_id = current_user.get("sub")
+
+        # ── Fetch user with all relations in one query ─────────────────────────
+        result = await db.execute(
+            select(Users)
+            .options(
+                joinedload(Users.user_profile),
+                joinedload(Users.user_contact),
+                joinedload(Users.user_kyc),
+            )
+            .where(Users.id == user_id)
+        )
+        user = result.unique().scalar_one_or_none()
+
+        if not user:
+            raise RailMindException(
+                code="RM-AUTH-004",
+                message="User not found",
+                status_code=404,
+            )
+
+        # ── Extract only non-null fields from payload ──────────────────────────
+        update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
+
+        if not update_data:
+            raise RailMindException(
+                code="RM-AUTH-016",
+                message="No fields provided for update",
+                status_code=400,
+            )
+
+        # ── Separate updates by table (Users, UserProfiles, UserContacts, UserKYC) ──
+        user_updates = {}
+        profile_updates = {}
+        contact_updates = {}
+        kyc_updates = {}
+
+        # Users table fields
+        user_fields = {"preferred_language"}
+        # UserProfiles table fields
+        profile_fields = {
+            "first_name",
+            "last_name",
+            "gender",
+            "date_of_birth",
+            "marital_status",
+            "nationality",
+            "occupation_type",
+            "occupation",
+        }
+        # UserContacts table fields
+        contact_fields = {
+            "address_line1",
+            "street",
+            "state",
+            "pin_code",
+            "country",
+            "landline_number",
+        }
+        # UserKYC table fields
+        kyc_fields = {"aadhaar_number", "pan_number"}
+
+        for key, value in update_data.items():
+            if key in user_fields:
+                user_updates[key] = value
+            elif key in profile_fields:
+                profile_updates[key] = value
+            elif key in contact_fields:
+                contact_updates[key] = value
+            elif key in kyc_fields:
+                kyc_updates[key] = value
+
+        # ── Update Users table ────────────────────────────────────────────────────
+        if user_updates:
+            for key, value in user_updates.items():
+                setattr(user, key, value)
+
+        # ── Update UserProfiles ───────────────────────────────────────────────────
+        if profile_updates:
+            if not user.user_profile:
+                # Create profile if it doesn't exist (shouldn't normally happen)
+                user.user_profile = UserProfiles(user_id=user_id)
+            for key, value in profile_updates.items():
+                setattr(user.user_profile, key, value)
+
+        # ── Update UserContacts ───────────────────────────────────────────────────
+        if contact_updates:
+            if not user.user_contact:
+                # Create contact if it doesn't exist (shouldn't normally happen)
+                user.user_contact = UserContacts(user_id=user_id)
+            for key, value in contact_updates.items():
+                setattr(user.user_contact, key, value)
+
+        # ── Update UserKYC (encrypt sensitive fields) ────────────────────────────
+        if kyc_updates:
+            if not user.user_kyc:
+                user.user_kyc = UserKYC(user_id=user_id)
+
+            # Encrypt Aadhaar and PAN before storing
+            if "aadhaar_number" in kyc_updates and kyc_updates["aadhaar_number"]:
+                kyc_updates["aadhaar_number"] = encrypt_kyc(
+                    kyc_updates["aadhaar_number"]
+                )
+            if "pan_number" in kyc_updates and kyc_updates["pan_number"]:
+                kyc_updates["pan_number"] = encrypt_kyc(kyc_updates["pan_number"])
+
+            for key, value in kyc_updates.items():
+                setattr(user.user_kyc, key, value)
+
+        # ── Commit all changes ────────────────────────────────────────────────────
+        await db.flush()
+        await db.commit()
+        await db.refresh(user)
+
+        logger.info("User profile updated successfully user_id=%s", user_id)
+
+        # ── Build response with only updated fields ───────────────────────────────
+        response_data = {}
+
+        # Add updated user fields
+        if user_updates:
+            response_data.update(user_updates)
+
+        # Add updated profile fields
+        if profile_updates:
+            response_data.update(profile_updates)
+
+        # Add updated contact fields
+        if contact_updates:
+            response_data.update(contact_updates)
+
+        # Add updated KYC fields (with masking for sensitive data)
+        if kyc_updates:
+            if "aadhaar_number" in kyc_updates:
+                decrypted = decrypt_kyc(kyc_updates["aadhaar_number"])
+                response_data["aadhaar_number"] = mask_kyc(decrypted)
+            if "pan_number" in kyc_updates:
+                decrypted = decrypt_kyc(kyc_updates["pan_number"])
+                response_data["pan_number"] = mask_kyc(decrypted)
+
+        return response_data
+
+    async def upload_profile_photo(
+        self, current_user: dict, profile_photo, db: AsyncSession
+    ) -> dict:
+        user_id = current_user.get("sub")
+
+        # ── Fetch user with relations ──────────────────────────────────────────
+        result = await db.execute(
+            select(Users)
+            .options(
+                joinedload(Users.user_profile),
+                joinedload(Users.user_contact),
+                joinedload(Users.user_kyc),
+            )
+            .where(Users.id == user_id)
+        )
+        user = result.unique().scalar_one_or_none()
+
+        if not user:
+            raise RailMindException(
+                code="RM-AUTH-004",
+                message="User not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        # ── Upload with deterministic filename (username-based) ────────────────
+        file_bytes = await profile_photo.read()
+
+        profile_photo_public_url = upload_image_to_supabase(
+            file_bytes=file_bytes,
+            file_name=user.username,
+            folder="profile",
+            unique=False,
+        )
+
+        # ── Save URL in DB ─────────────────────────────────────────────────────
+        user.user_profile.profile_photo = profile_photo_public_url
+        await db.commit()
+        await db.refresh(user.user_profile)
+
+        return {
+            "profile_photo": user.user_profile.profile_photo,
         }
 
     async def logout_user(
@@ -671,3 +856,49 @@ class AuthService:
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             path="/",
         )
+
+    async def issue_session(
+        self,
+        user: Users,
+        response: Response,
+        redis: Redis,
+    ) -> dict:
+        """Tokens banao, Redis mein refresh hash daalo, cookies set karo.
+        Har auth method (password / OTP / Google) ka common exit point."""
+
+        # Account active check yahan — kisi bhi raste se aaya ho,
+        # disabled user ko session NAHI milna chahiye
+        if not user.is_active:
+            raise RailMindException(
+                code="RM-AUTH-004",
+                message="Account is disabled. Please contact support",
+                status_code=403,
+            )
+
+        access_token, jti = create_access_token(
+            user_id=str(user.id),
+            username=user.username,
+            role=user.role,
+        )
+        refresh_token, _ = create_refresh_token(user_id=str(user.id))
+        csrf_token = generate_csrf_token()
+
+        await redis.setex(
+            f"refresh_token:{user.id}",
+            settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+            hash_token(refresh_token),
+        )
+
+        AuthService._set_auth_cookies(
+            response=response,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            csrf_token=csrf_token,
+        )
+
+        return {
+            "id": str(user.id),
+            "email": user.email,
+            "username": user.username,
+            "role": user.role,
+        }

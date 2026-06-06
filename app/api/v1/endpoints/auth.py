@@ -1,18 +1,22 @@
-from fastapi import APIRouter, Depends, Response, Cookie
+from fastapi import APIRouter, Depends, Response, Cookie, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
-from app.api.deps import get_current_user, get_db, get_redis
+from app.api.deps import get_current_user, get_db, get_redis, rate_limit
 from app.schemas.auth import (
     ContactDetails,
     LoginRequest,
     SendOtpDTO,
     VerifyOtpDTO,
+    UpdateUserProfileDTO,
 )
 from app.services.auth_service import AuthService
-from app.core.response import APIResponse, created, ok
+from app.services.google_auth_service import GoogleAuthService
+from app.core.response import created, ok
 from app.core.constants.auth_user import REFRESH_TOKEN_COOKIE_NAME
 from app.core.exceptions import RailMindException
+from app.schemas.Request.googleAuthRequestDTO import GoogleAuthRequestDTO
+from app.schemas.Response.googleAuthResponseDTO import GoogleAuthResponseDTO
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -29,7 +33,10 @@ async def create_user_account(
     return created(data=data, message="Account created. Please verify your email.")
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    dependencies=[Depends(rate_limit(limit=10, scope="auth_login"))],
+)
 async def login_user(
     payload: LoginRequest,
     response: Response,
@@ -40,7 +47,32 @@ async def login_user(
     return ok(data=data, message="Logged in successfully.")
 
 
-@router.post("/otp/send")
+@router.post(
+    "/google",
+    dependencies=[Depends(rate_limit(limit=10, scope="auth_google"))],
+)
+async def google_auth(
+    payload: GoogleAuthRequestDTO,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    service = GoogleAuthService(db)
+    user, auth_result = await service.authenticate_with_google(payload.id_token)
+    await auth_service.issue_session(user, response, redis)
+
+    message = (
+        "Account created via Google."
+        if auth_result.is_new_user
+        else "Logged in via Google."
+    )
+    return ok(data=auth_result, message=message)
+
+
+@router.post(
+    "/otp/send",
+    dependencies=[Depends(rate_limit(limit=10, scope="auth_otp_send"))],
+)
 async def send_otp(
     payload: SendOtpDTO,
     db: AsyncSession = Depends(get_db),
@@ -89,6 +121,26 @@ async def get_current_user_profile(
 ):
     data = await auth_service.get_current_user_profile(current_user, db)
     return ok(data=data, message="Profile fetched successfully.")
+
+
+@router.patch("/update-profile")
+async def update_current_user_profile(
+    payload: UpdateUserProfileDTO,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await auth_service.update_current_user_profile(current_user, payload, db)
+    return ok(data=data, message="Profile updated successfully.")
+
+
+@router.post("/upload-profile-photo")
+async def upload_profile_photo(
+    profile_photo: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await auth_service.upload_profile_photo(current_user, profile_photo, db)
+    return ok(data=data, message="Profile Photo Updated Successfully.")
 
 
 @router.post("/logout")

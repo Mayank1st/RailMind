@@ -17,6 +17,7 @@ from app.core.exception_handlers import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_pagination import add_pagination
 
 from app.dependencies import get_db
 from app.utils.helpers import get_utc_timezone
@@ -50,6 +51,9 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(api_router, prefix="/api")
 app.include_router(ai_router, prefix="/api/v1")
+
+# Enables fastapi-pagination across all routers (page/size resolution).
+add_pagination(app)
 
 
 @app.get("/", tags=["Home"])

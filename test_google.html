@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <h3>RailMind Google Token Generator (dev only)</h3>
+
+  <div id="g_id_onload"
+       data-client_id="647525353939-2n0j9n29aofabi8hppiu8q4f3gapuo4a.apps.googleusercontent.com"
+       data-callback="handleCredential">
+  </div>
+  <div class="g_id_signin" data-type="standard"></div>
+
+  <script>
+    function handleCredential(response) {
+      console.log("ID TOKEN ↓↓↓");
+      console.log(response.credential);
+      // Bada token hai, textarea mein bhi daal dete hain copy ke liye:
+      const ta = document.createElement("textarea");
+      ta.style.width = "100%"; ta.rows = 10;
+      ta.value = response.credential;
+      document.body.appendChild(ta);
+    }
+  </script>
+</body>
+</html>

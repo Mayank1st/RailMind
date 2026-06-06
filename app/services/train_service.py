@@ -24,13 +24,52 @@ from app.schemas.Response.trainResponseDTO import (
     CoachWiseSeatAvailabilityResponse,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi_pagination import Params
+from fastapi_pagination.ext.sqlalchemy import apaginate
 from app.core.exceptions import RailMindException
 from app.core.constants.booking import PassengerStatus
+from app.schemas.Request.trainFilterDTO import TrainFilter
 
 from app.utils.helpers import get_time_after_hours
 
 
 class TrainService:
+
+    async def list_trains(
+        self,
+        db: AsyncSession,
+        train_filter: TrainFilter,
+        params: Params,
+    ):
+        """
+        Generic list endpoint — reference implementation of the
+        filter + sort + paginate pattern. Reuse this shape for any resource.
+        """
+        query = select(Trains).options(
+            selectinload(Trains.source_station),
+            selectinload(Trains.destination_station),
+        )
+        query = train_filter.filter(query)  # WHERE: field filters + search
+        query = train_filter.sort(query)  # ORDER BY: ?order_by=...
+
+        return await apaginate(
+            db,
+            query,
+            params,
+            transformer=lambda rows: [self._serialize_train_summary(t) for t in rows],
+        )
+
+    @staticmethod
+    def _serialize_train_summary(train) -> dict:
+        return {
+            "train_id": train.id,
+            "train_number": train.train_number,
+            "train_name": train.train_name,
+            "train_type": train.train_type,
+            "runs_on_days": train.runs_on_days,
+            "source_station": train.source_station.station_code,
+            "destination_station": train.destination_station.station_code,
+        }
 
     async def search_trains(
         self,

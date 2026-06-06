@@ -2,7 +2,9 @@ import hmac
 import hashlib
 import uuid
 import secrets
+import base64
 
+from cryptography.fernet import Fernet
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from typing import Any, Optional
@@ -51,6 +53,9 @@ COMMON_PASSWORD_SET = [
 #  Hash Sensistive Data
 
 HMAC_SECRET_KEY = settings.HMAC_SECRET_KEY
+KYC_ENCRYPTION_KEY = settings.KYC_ENCRYPTION_KEY
+_fernet = Fernet(KYC_ENCRYPTION_KEY.encode())
+
 
 ph = PasswordHasher(
     time_cost=3,
@@ -93,6 +98,23 @@ def hash_token(token: str) -> str:
 def generate_csrf_token() -> str:
     """Generate a cryptographically secure CSRF token."""
     return secrets.token_hex(32)
+
+
+def encrypt_kyc(plain_value: str) -> str:
+    """Encrypt Aadhaar/PAN for reversible storage. Returns urlsafe-base64 token."""
+    return _fernet.encrypt(plain_value.encode()).decode()
+
+
+def decrypt_kyc(encrypted_value: str) -> str:
+    """Decrypt KYC token back to plaintext. Raises InvalidToken on tamper/wrong key."""
+    return _fernet.decrypt(encrypted_value.encode()).decode()
+
+
+def mask_kyc(plain_value: str, visible_last: int = 4) -> str:
+    """Mask all but the last N chars — e.g. 'XXXXXXXX2345' for display."""
+    if len(plain_value) <= visible_last:
+        return plain_value
+    return "X" * (len(plain_value) - visible_last) + plain_value[-visible_last:]
 
 
 # ─── Access Token ─────────────────────────────────────────────────────────────

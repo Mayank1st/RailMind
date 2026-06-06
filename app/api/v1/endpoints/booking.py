@@ -1,9 +1,10 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.booking_service import BookingService
-from app.core.constants.booking import JourneyActionType
+from app.core.constants.booking import JourneyActionType, BookingJourneyFilter
+from app.core.pagination import BookingParams, paginated
 from app.services.booking_retry_service import BookingRetryService
 from app.services.booking_retry_service import IMMEDIATE_RETRY_INTERVALS
 from app.schemas.Request.bookingRequestDTO import CreateBookingDTO, JourneyDTO
@@ -36,16 +37,21 @@ async def create_booking(
 
 @router.get("/")
 async def list_user_bookings(
-    db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)
+    filter: BookingJourneyFilter = Query(
+        BookingJourneyFilter.ALL,
+        description="Filter bookings by UPCOMING, COMPLETED, CANCELLED or ALL",
+    ),
+    params: BookingParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
-    data = await booking_service.list_user_bookings(
+    page = await booking_service.list_user_bookings(
         current_user_id=current_user["sub"],
         db=db,
+        journey_filter=filter,
+        params=params,
     )
-    return ok(
-        data=data,
-        message=f"User Booking List Fetched successfully.",
-    )
+    return paginated(page, message="User Booking List Fetched successfully.")
 
 
 @router.get("/upcoming-and-past-journey")
@@ -96,7 +102,24 @@ async def cancel_booking(
     )
 
 
-@router.get("/{booking_id}/receipt")
+@router.get("/{booking_id}/view-receipt")
+async def view_receipt(
+    booking_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    data = await booking_service.view_receipt(
+        booking_id,
+        current_user_id=current_user["sub"],
+        db=db,
+    )
+    return ok(
+        data=data,
+        message=f"Receipt Fetched Successfully.",
+    )
+
+
+@router.post("/{booking_id}/receipt")
 async def download_receipt(
     booking_id: UUID,
     db: AsyncSession = Depends(get_db),

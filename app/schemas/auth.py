@@ -261,3 +261,29 @@ class UserProfileDTO(BaseDTO):
     pin_code: Optional[str] = None
     country: Optional[str] = None
     kyc_status: Optional[str] = None
+
+
+class UpdateUserProfileDTO(BaseDTO):
+    """
+    Partial user profile update schema.
+    All fields are optional — user can update one or more fields at once.
+    """
+
+    preferred_language: Optional[str] = Field(None, min_length=2, max_length=30)
+    first_name: Optional[str] = Field(None, min_length=2, max_length=50)
+    last_name: Optional[str] = Field(None, min_length=2, max_length=50)
+    gender: Optional[Gender] = None
+    date_of_birth: Optional[date] = None
+    marital_status: Optional[MaritalStatus] = None
+    nationality: Optional[str] = Field(None, min_length=2, max_length=50)
+    occupation_type: Optional[OccupationType] = None
+    occupation: Optional[str] = Field(None, max_length=100)
+    address_line1: Optional[str] = Field(None, min_length=3, max_length=100)
+    street: Optional[str] = Field(None, min_length=3, max_length=100)
+    state: Optional[str] = Field(None, min_length=2, max_length=50)
+    pin_code: Optional[str] = Field(None, pattern=r"^\d{6}$")
+    country: Optional[str] = Field(None, min_length=2, max_length=50)
+    landline_number: Optional[str] = Field(None, pattern=r"^\d{6,10}$")
+    aadhaar_number: Optional[str] = Field(None, pattern=r"^\d{12}$")
+    pan_number: Optional[str] = Field(None, pattern=r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$")
+    mobile_number: Optional[str] = None

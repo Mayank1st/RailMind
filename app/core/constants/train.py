@@ -47,3 +47,4 @@ class BerthType(str, Enum):
     SIDE_LOWER = "SL"
     SIDE_UPPER = "SU"
     SEAT = "SEAT"  # CC / 2S coaches
+    NP = "NP"

@@ -6,6 +6,7 @@ from app.core.fare_calculator import FareCalculator, FareBreakdown
 from app.db.models.booking import FareRules
 from app.db.models.train import TrainStations, Stations
 from app.core.exceptions import RailMindException
+from app.integrations.supabase_client import upload_pdf_to_supabase
 
 
 class CommonService:

@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends
+from fastapi_filter import FilterDepends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db, get_redis
 from app.core.response import APIResponse, created, ok
+from app.core.pagination import Params, paginated
 
 
 from app.services.train_service import TrainService
 from app.schemas.train import SearchTrainDTO, CheckSeatAvailabilityDTO
+from app.schemas.Request.trainFilterDTO import TrainFilter
 
 router = APIRouter(prefix="/train", tags=["Train"])
 train_service = TrainService()
@@ -15,6 +18,18 @@ train_service = TrainService()
 async def search_trains(payload: SearchTrainDTO, db: AsyncSession = Depends(get_db)):
     data = await train_service.search_trains(payload, db)
     return ok(data=data, message="Train Details Fetched Successfully.")
+
+
+# NOTE: must be registered before "/{train_number}" so "list" isn't captured
+# as a train_number path param.
+@router.get("/list")
+async def list_trains(
+    train_filter: TrainFilter = FilterDepends(TrainFilter),
+    params: Params = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    page = await train_service.list_trains(db, train_filter, params)
+    return paginated(page, message="Trains fetched successfully.")
 
 
 @router.get("/{train_number}")

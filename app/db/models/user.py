@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, String
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,7 @@ from app.db.base import BaseModel, DB_SCHEMA
 
 if TYPE_CHECKING:
     from app.db.models.user_behavior_logs import UserBehaviorLogs
+    from app.db.models.user_oauth_accounts import UserOAuthAccounts
 
 
 class Users(BaseModel):
@@ -21,7 +22,7 @@ class Users(BaseModel):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
-    password: Mapped[str] = mapped_column(String(255), nullable=False)
+    password: Mapped[str] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(
         String(20),
         default=UserRole.USER,
@@ -37,8 +38,8 @@ class Users(BaseModel):
     preferred_language: Mapped[str] = mapped_column(
         String(30), default="English", nullable=False
     )
-    security_question: Mapped[str] = mapped_column(String(255), nullable=False)
-    security_answer_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    security_question: Mapped[str] = mapped_column(String(255), nullable=True)
+    security_answer_hash: Mapped[str] = mapped_column(String(255), nullable=True)
 
     user_profile = relationship(
         "UserProfiles",
@@ -65,9 +66,23 @@ class Users(BaseModel):
         cascade="all, delete-orphan",
     )
 
+    bookings = relationship(
+        "Bookings",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+
     behavior_logs: Mapped[list["UserBehaviorLogs"]] = relationship(
         "UserBehaviorLogs",
         back_populates="user",
+        lazy="noload",
+    )
+
+    user_oauth_accounts: Mapped[list["UserOAuthAccounts"]] = relationship(
+        "UserOAuthAccounts",
+        back_populates="user",
+        cascade="all, delete-orphan",
         lazy="noload",
     )
 
@@ -83,16 +98,17 @@ class UserProfiles(BaseModel):
     )
     first_name: Mapped[str] = mapped_column(String(50), nullable=False)
     last_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    gender: Mapped[Gender] = mapped_column(
-        SAEnum(Gender, name="gender_enum"), nullable=False
+    gender: Mapped[Gender | None] = mapped_column(
+        SAEnum(Gender, name="gender_enum"), nullable=True
     )
     date_of_birth: Mapped[date | None] = mapped_column(Date)
-    marital_status: Mapped[MaritalStatus] = mapped_column(
-        SAEnum(MaritalStatus, name="marital_status_enum"), nullable=False
+    marital_status: Mapped[MaritalStatus | None] = mapped_column(
+        SAEnum(MaritalStatus, name="marital_status_enum"), nullable=True
     )
     nationality: Mapped[str | None] = mapped_column(String(50))
     occupation_type: Mapped[str | None] = mapped_column(String(50))
     occupation: Mapped[str | None] = mapped_column(String(100))
+    profile_photo: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user = relationship("Users", back_populates="user_profile")
 
@@ -106,7 +122,7 @@ class UserContacts(BaseModel):
         unique=True,
         nullable=False,
     )
-    mobile_number: Mapped[str] = mapped_column(String(15), nullable=False)
+    mobile_number: Mapped[str | None] = mapped_column(String(15), nullable=True)
     address_line1: Mapped[str | None] = mapped_column(String(100))
     street: Mapped[str | None] = mapped_column(String(100))
     state: Mapped[str | None] = mapped_column(String(50))
@@ -127,8 +143,8 @@ class UserKYC(BaseModel):
         nullable=False,
     )
     # Store HMAC-SHA256 hex (64 chars) for deduplication; not plaintext Aadhaar/PAN.
-    aadhaar_number: Mapped[str | None] = mapped_column(String(64))
-    pan_number: Mapped[str | None] = mapped_column(String(64))
+    aadhaar_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pan_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     kyc_status: Mapped[KycStatus] = mapped_column(
         SAEnum(KycStatus, name="kyc_status_enum"), default=KycStatus.PENDING
     )

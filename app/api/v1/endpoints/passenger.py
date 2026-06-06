@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, get_redis
-from app.core.response import APIResponse, created, ok
+from app.core.response import ok, created
 
 from app.schemas.Request.passengerRequestDTO import (
     CreatePassengerDTO,
@@ -29,7 +29,7 @@ async def create_passenger(
         current_user_id=current_user["sub"],
         db=db,
     )
-    return ok(
+    return created(
         data=data,
         message=f"Passenger created successfully.",
     )
