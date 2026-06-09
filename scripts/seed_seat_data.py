@@ -1,20 +1,3 @@
-"""
-scripts/seed_seat_data.py
-
-Seeder script — seeds Coaches, Seats, and SeatInventories for all trains.
-
-LOW-MEMORY STREAMING VERSION:
-- Records are flushed to DB in chunks as they are generated, instead of
-  building millions of dicts in memory first (which OOM-kills on small VMs).
-- Periodic commits make the script resumable — re-running safely skips
-  already-inserted rows via on_conflict_do_nothing + existing-key checks.
-
-Usage:
-    python scripts/seed_seat_data.py
-    python scripts/seed_seat_data.py --dry-run
-    python scripts/seed_seat_data.py --days 7
-"""
-
 import asyncio
 import argparse
 import sys
@@ -33,7 +16,6 @@ BATCH_SIZE = args.batch_size
 DAYS_AHEAD = args.days
 DRY_RUN = args.dry_run
 
-# Flush thresholds — keep in-memory record lists bounded (low-memory streaming)
 SEAT_FLUSH_THRESHOLD = 20_000
 INVENTORY_FLUSH_THRESHOLD = 50_000
 
@@ -48,8 +30,6 @@ from app.db.base import DATABASE_URL, DB_SCHEMA
 from app.db.models.train import Coaches, SeatInventories, Seats, Trains
 from app.utils.helpers import get_utc_timezone
 
-
-# ─── Rake Configuration ───────────────────────────────────────────────────────
 
 RAKE_CONFIG: dict[str, dict[str, int]] = {
     "rajdhani": {"3A": 12, "2A": 4, "1A": 2},
@@ -138,9 +118,6 @@ RAC_BERTHS_PER_COACH: dict[str, int] = {
 }
 
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-
 def new_id() -> uuid.UUID:
     return uuid.uuid4()
 
@@ -174,19 +151,7 @@ def flag_rac_berths(seats, train_class):
     return [(sn, bt, i in rac_indexes) for i, (sn, bt, _) in enumerate(seats)]
 
 
-# ─── Streaming flush helpers (low-memory) ─────────────────────────────────────
-
-
-async def _flush_coaches_seats(
-    session: AsyncSession,
-    coach_records: list,
-    seat_records: list,
-) -> None:
-    """Insert pending coach/seat records, COMMIT, and clear the lists.
-
-    Coaches are inserted before seats (FK dependency). Committing per flush
-    keeps the Postgres transaction small and makes the script resumable.
-    """
+async def _flush_coaches_seats(session, coach_records, seat_records):
     if coach_records:
         for i in range(0, len(coach_records), BATCH_SIZE):
             stmt = (
@@ -196,7 +161,6 @@ async def _flush_coaches_seats(
             )
             await session.execute(stmt)
         coach_records.clear()
-
     if seat_records:
         for i in range(0, len(seat_records), BATCH_SIZE):
             stmt = (
@@ -206,12 +170,10 @@ async def _flush_coaches_seats(
             )
             await session.execute(stmt)
         seat_records.clear()
-
     await session.commit()
 
 
-async def _flush_inventories(session: AsyncSession, inventory_records: list) -> int:
-    """Insert pending inventory records, COMMIT, clear the list. Returns inserted count."""
+async def _flush_inventories(session, inventory_records):
     inserted = 0
     for i in range(0, len(inventory_records), BATCH_SIZE):
         stmt = (
@@ -228,24 +190,19 @@ async def _flush_inventories(session: AsyncSession, inventory_records: list) -> 
     return inserted
 
 
-# ─── Seeding functions ────────────────────────────────────────────────────────
-
-
-async def seed_coaches_and_seats(session: AsyncSession) -> dict:
+async def seed_coaches_and_seats(session):
     print("\n[1/3] Seeding coaches and seats...")
 
-    # Load all trains
     result = await session.execute(
         select(Trains.id, Trains.train_number, Trains.train_type)
     )
     trains = result.fetchall()
     print(f"      Found {len(trains):,} trains")
 
-    # Load existing coaches from DB first (resume-safe)
     existing_result = await session.execute(
         select(Coaches.id, Coaches.train_id, Coaches.coach_number, Coaches.train_class)
     )
-    existing_coaches: dict[tuple, uuid.UUID] = {
+    existing_coaches = {
         (str(row.train_id), row.coach_number): row.id
         for row in existing_result.fetchall()
     }
@@ -253,9 +210,9 @@ async def seed_coaches_and_seats(session: AsyncSession) -> dict:
         f"      Found {len(existing_coaches):,} coaches already in DB — will skip these"
     )
 
-    coach_records: list = []
-    seat_records: list = []
-    coach_class_map: dict[str, dict[str, list[uuid.UUID]]] = {}
+    coach_records = []
+    seat_records = []
+    coach_class_map = {}
     total_trains = len(trains)
     coaches_created = 0
     seats_created = 0
@@ -280,10 +237,8 @@ async def seed_coaches_and_seats(session: AsyncSession) -> dict:
                 existing_key = (str(train_id), coach_number)
 
                 if existing_key in existing_coaches:
-                    # Coach already exists — use its real ID
                     coach_id = existing_coaches[existing_key]
                 else:
-                    # New coach — queue for insert
                     coach_id = new_id()
                     coaches_created += 1
                     coach_records.append(
@@ -301,7 +256,6 @@ async def seed_coaches_and_seats(session: AsyncSession) -> dict:
                         }
                     )
 
-                    # Build seats only for new coaches
                     raw_seats = build_berth_sequence(
                         seat_cfg["berth_layout"], seat_cfg["total_seats"]
                     )
@@ -327,7 +281,6 @@ async def seed_coaches_and_seats(session: AsyncSession) -> dict:
 
             coach_class_map[str(train_id)][train_class] = coach_ids_for_class
 
-        # ── STREAMING FLUSH: keep memory bounded ──────────────────────────────
         if len(seat_records) >= SEAT_FLUSH_THRESHOLD:
             await _flush_coaches_seats(session, coach_records, seat_records)
             pct = int((t_idx + 1) / total_trains * 100)
@@ -338,7 +291,6 @@ async def seed_coaches_and_seats(session: AsyncSession) -> dict:
                 flush=True,
             )
 
-    # Final flush of any remainder
     await _flush_coaches_seats(session, coach_records, seat_records)
 
     if coaches_created:
@@ -352,10 +304,9 @@ async def seed_coaches_and_seats(session: AsyncSession) -> dict:
     return coach_class_map
 
 
-async def seed_seat_inventories(session: AsyncSession, coach_class_map: dict) -> None:
+async def seed_seat_inventories(session, coach_class_map):
     print(f"\n[2/3] Seeding seat inventories ({DAYS_AHEAD} days ahead)...")
 
-    # Load existing inventory keys from DB (resume-safe)
     existing_inv_result = await session.execute(
         select(
             SeatInventories.train_id,
@@ -364,7 +315,7 @@ async def seed_seat_inventories(session: AsyncSession, coach_class_map: dict) ->
             SeatInventories.quota,
         )
     )
-    existing_inv_keys: set[tuple] = {
+    existing_inv_keys = {
         (str(row.train_id), str(row.journey_date), row.train_class, row.quota)
         for row in existing_inv_result.fetchall()
     }
@@ -375,7 +326,7 @@ async def seed_seat_inventories(session: AsyncSession, coach_class_map: dict) ->
     today = date.today()
     date_range = [today + timedelta(days=d) for d in range(DAYS_AHEAD + 1)]
 
-    inventory_records: list = []
+    inventory_records = []
     total_trains = len(coach_class_map)
     total_inserted = 0
 
@@ -399,7 +350,6 @@ async def seed_seat_inventories(session: AsyncSession, coach_class_map: dict) ->
                     if quota_seats == 0:
                         continue
 
-                    # Skip if already exists
                     inv_key = (train_id_str, str(journey_date), train_class, quota)
                     if inv_key in existing_inv_keys:
                         continue
@@ -430,7 +380,6 @@ async def seed_seat_inventories(session: AsyncSession, coach_class_map: dict) ->
                         }
                     )
 
-        # ── STREAMING FLUSH: keep memory bounded ──────────────────────────────
         if len(inventory_records) >= INVENTORY_FLUSH_THRESHOLD:
             total_inserted += await _flush_inventories(session, inventory_records)
 
@@ -442,7 +391,6 @@ async def seed_seat_inventories(session: AsyncSession, coach_class_map: dict) ->
             flush=True,
         )
 
-    # Final flush of any remainder
     if inventory_records:
         total_inserted += await _flush_inventories(session, inventory_records)
 
@@ -454,10 +402,7 @@ async def seed_seat_inventories(session: AsyncSession, coach_class_map: dict) ->
         print("\r      All inventories already exist — skipped ✅                    ")
 
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
-
-
-async def main() -> None:
+async def main():
     start_time = time.time()
 
     print("=" * 60)
@@ -497,9 +442,6 @@ async def main() -> None:
         bind=engine, class_=AsyncSession, expire_on_commit=False
     )
 
-    # NOTE: no single wrapping transaction — flush helpers commit periodically.
-    # Combined with on_conflict_do_nothing + existing-key checks, the script is
-    # safe to re-run and resumes where it left off.
     async with async_session() as session:
         try:
             coach_class_map = await seed_coaches_and_seats(session)
