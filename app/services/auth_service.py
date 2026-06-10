@@ -834,7 +834,7 @@ class AuthService:
             value=access_token,
             httponly=True,
             secure=not settings.DEBUG,
-            samesite="lax",
+            samesite="none",
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             path="/",
         )
@@ -843,7 +843,7 @@ class AuthService:
             value=refresh_token,
             httponly=True,
             secure=not settings.DEBUG,
-            samesite="lax",
+            samesite="none",
             max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
             path=REFRESH_TOKEN_COOKIE_PATH,
         )
@@ -852,7 +852,7 @@ class AuthService:
             value=csrf_token,
             httponly=False,
             secure=not settings.DEBUG,
-            samesite="lax",
+            samesite="none",
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             path="/",
         )
