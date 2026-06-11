@@ -1,0 +1,31 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# RailMind - Production Overrides (GCP box)
+#
+# Layered ON TOP of docker-compose.yml — never run this file alone:
+#   docker compose --env-file .env \
+#     -f docker/docker-compose.yml -f docker/docker-compose.prod.yml \
+#     up -d --build
+#
+# What it changes vs the dev stack:
+#   - backend runs multi-worker uvicorn, NO --reload (reload = single process +
+#     file-watcher overhead; it is the main reason prod requests crawl)
+#   - restart policies so containers come back after a VM reboot / OOM kill
+#
+# NOTE: the dev hot-reload source mounts (../app, ../alembic) from the base file
+# still apply — on the server the repo checkout IS the deployed code, so that is
+# harmless. Tune worker count via WEB_CONCURRENCY in .env (default 2).
+# ════════════════════════════════════════════════════════════════════════════════
+
+services:
+  backend:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-2}
+    restart: unless-stopped
+
+  celery_worker:
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped

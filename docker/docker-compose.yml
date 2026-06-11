@@ -1,27 +1,44 @@
 # ════════════════════════════════════════════════════════════════════════════════
 # RailMind - Docker Compose Configuration
 # Local development stack: FastAPI + PostgreSQL + Redis + Celery
+#
+# Run from the repo root:
+#   docker compose --env-file .env -f docker/docker-compose.yml up --build
+#
+# --env-file .env  → lets Postgres read its init creds (${DB_PASSWORD} etc.) from
+#                    .env, so the DB password is NEVER hard-coded into this
+#                    committed file. Without it, the postgres service errors out.
+# env_file: ../.env (per service, below) injects the full app config into the
+#                    backend/worker containers.
+# (relative paths ../.env, ../app, .. resolve against this file's dir.)
+#
+# Config model: the app (app/config.py) reads individual DB_* / SUPABASE_* / etc.
+# vars, NOT a single DATABASE_URL. All of them come from the repo-root .env. Only
+# the values that differ inside the Docker network (DB_HOST, REDIS_URL) are
+# overridden in `environment:`, which takes precedence over env_file.
 # ════════════════════════════════════════════════════════════════════════════════
-
-version: '3.8'
 
 services:
   # ─────────────────────────────────────────────────────────────────────────────
   # PostgreSQL Database
+  # Init creds are read from the repo-root .env (via --env-file .env) so they
+  # always match what the backend authenticates with — and so the password is
+  # never committed to git. NOTE: POSTGRES_* only take effect on FIRST init of an
+  # empty data volume; changing them later does NOT re-key an existing volume.
   # ─────────────────────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: railmind_postgres
     environment:
-      POSTGRES_USER: railmind
-      POSTGRES_PASSWORD: railmind_dev_pass
-      POSTGRES_DB: railmind_db
+      POSTGRES_USER: "${DB_USERNAME:?set DB_USERNAME (run with --env-file .env)}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?set DB_PASSWORD (run with --env-file .env)}"
+      POSTGRES_DB: "${DB_NAME:?set DB_NAME (run with --env-file .env)}"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U railmind"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-railmind} -d ${DB_NAME:-railmind_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -52,43 +69,27 @@ services:
   # ─────────────────────────────────────────────────────────────────────────────
   backend:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     container_name: railmind_backend
     ports:
       - "8000:8000"
+    # All app settings come from the repo-root .env ...
+    env_file:
+      - ../.env
+    # ... except the values that must point at sibling containers, not localhost.
     environment:
-      # Database
-      DATABASE_URL: postgresql+asyncpg://railmind:railmind_dev_pass@postgres:5432/railmind_db
-      
-      # Redis
+      DB_HOST: postgres
       REDIS_URL: redis://redis:6379/0
-      
-      # App Config
-      DEBUG: "True"
-      ENVIRONMENT: development
-      
-      # JWT (use strong secrets in production)
-      JWT_SECRET_KEY: dev_secret_key_change_in_production
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
-      REFRESH_TOKEN_EXPIRE_DAYS: 7
-      
-      # Email (fill these from your Gmail setup)
-      EMAIL_SMTP_HOST: smtp.gmail.com
-      EMAIL_SMTP_PORT: 587
-      EMAIL_USERNAME: ${EMAIL_USERNAME}
-      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
-      EMAIL_FROM_NAME: RailMind
-      EMAIL_USE_TLS: "True"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      # Mount source code for development (optional - comment out for prod-like testing)
-      - ./app:/app/app
-      - ./alembic:/app/alembic
+      # Mount source for hot reload (comment out for prod-like testing)
+      - ../app:/app/app
+      - ../alembic:/app/alembic
     networks:
       - railmind_network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -98,21 +99,21 @@ services:
   # ─────────────────────────────────────────────────────────────────────────────
   celery_worker:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     container_name: railmind_celery_worker
+    env_file:
+      - ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://railmind:railmind_dev_pass@postgres:5432/railmind_db
+      DB_HOST: postgres
       REDIS_URL: redis://redis:6379/0
-      EMAIL_SMTP_HOST: smtp.gmail.com
-      EMAIL_SMTP_PORT: 587
-      EMAIL_USERNAME: ${EMAIL_USERNAME}
-      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
     depends_on:
-      - redis
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - ./app:/app/app
+      - ../app:/app/app
     networks:
       - railmind_network
     command: celery -A app.tasks.celery_app worker --loglevel=info
@@ -122,10 +123,13 @@ services:
   # ─────────────────────────────────────────────────────────────────────────────
   # celery_beat:
   #   build:
-  #     context: .
+  #     context: ..
   #     dockerfile: Dockerfile
   #   container_name: railmind_celery_beat
+  #   env_file:
+  #     - ../.env
   #   environment:
+  #     DB_HOST: postgres
   #     REDIS_URL: redis://redis:6379/0
   #   depends_on:
   #     - redis

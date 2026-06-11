@@ -805,17 +805,25 @@ class AuthService:
                 )
 
         # ── 3. Clear all three cookies from browser ───────────────────────────────
+        # samesite/secure must match _set_auth_cookies, warna browser cross-site
+        # context me deletion wali Set-Cookie ko hi reject kar dega
         response.delete_cookie(
             key=ACCESS_TOKEN_COOKIE_NAME,
             path="/",
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
         )
         response.delete_cookie(
             key=REFRESH_TOKEN_COOKIE_NAME,
             path=REFRESH_TOKEN_COOKIE_PATH,
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
         )
         response.delete_cookie(
             key=CSRF_TOKEN_COOKIE_NAME,
             path="/",
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
         )
 
         logger.info("User logged out successfully user_id=%s", user_id)
@@ -833,8 +841,8 @@ class AuthService:
             key=ACCESS_TOKEN_COOKIE_NAME,
             value=access_token,
             httponly=True,
-            secure=not settings.DEBUG,
-            samesite="none",
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             path="/",
         )
@@ -842,8 +850,8 @@ class AuthService:
             key=REFRESH_TOKEN_COOKIE_NAME,
             value=refresh_token,
             httponly=True,
-            secure=not settings.DEBUG,
-            samesite="none",
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
             max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
             path=REFRESH_TOKEN_COOKIE_PATH,
         )
@@ -851,8 +859,8 @@ class AuthService:
             key=CSRF_TOKEN_COOKIE_NAME,
             value=csrf_token,
             httponly=False,
-            secure=not settings.DEBUG,
-            samesite="none",
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             path="/",
         )
