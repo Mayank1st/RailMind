@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     print("🛑 Shutting down application...")
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, redirect_slashes=False)
 
 
 app.add_middleware(

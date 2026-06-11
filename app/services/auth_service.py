@@ -639,7 +639,7 @@ class AuthService:
             "state",
             "pin_code",
             "country",
-            "landline_number",
+            "mobile_number" "landline_number",
         }
         # UserKYC table fields
         kyc_fields = {"aadhaar_number", "pan_number"}
