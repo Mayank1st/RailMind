@@ -3,8 +3,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
 
-    # DEBUG
-    DEBUG: str = False
+    DEBUG: bool = False
+    COOKIE_SECURE: bool | None = None
+    COOKIE_SAMESITE: str | None = None
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def cookie_secure(self) -> bool:
+        return (not self.DEBUG) if self.COOKIE_SECURE is None else self.COOKIE_SECURE
+
+    @property
+    def cookie_samesite(self) -> str:
+        if self.COOKIE_SAMESITE is not None:
+            return self.COOKIE_SAMESITE
+        return "lax" if self.DEBUG else "none"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
     # DATABASE
     DB_USERNAME: str
