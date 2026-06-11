@@ -70,4 +70,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 # Cloud Run will use PORT env var, fallback to 8000
 # WEB_CONCURRENCY tunes worker count per box (2 is sane for a small VM;
 # raise towards CPU core count on bigger instances)
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WEB_CONCURRENCY:-2}
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WEB_CONCURRENCY:-2} --proxy-headers --forwarded-allow-ips="*"
