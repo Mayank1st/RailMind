@@ -7,7 +7,7 @@
 # ─────────────────────────────────────────────────────────────────────────────────
 # Stage 1: Builder - Install dependencies
 # ─────────────────────────────────────────────────────────────────────────────────
-FROM python:3.14-slim AS builder
+FROM python:3.14-slim@sha256:d7a925f9eb9639a93e455b9f12c167569358818c0f62b51b88edbc8fcf34c421 AS builder
 
 WORKDIR /app
 
@@ -22,13 +22,14 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # Stage 2: Runtime - Minimal production image
 # ─────────────────────────────────────────────────────────────────────────────────
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:d7a925f9eb9639a93e455b9f12c167569358818c0f62b51b88edbc8fcf34c421
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -70,4 +71,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 # Cloud Run will use PORT env var, fallback to 8000
 # WEB_CONCURRENCY tunes worker count per box (2 is sane for a small VM;
 # raise towards CPU core count on bigger instances)
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WEB_CONCURRENCY:-2} --proxy-headers --forwarded-allow-ips="*"
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WEB_CONCURRENCY:-1} --proxy-headers --forwarded-allow-ips="*" --timeout-keep-alive 65
