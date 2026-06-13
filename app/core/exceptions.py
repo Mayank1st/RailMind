@@ -112,3 +112,13 @@ class RateLimitExceededError(RailMindException):
     error_code = "RM-RATE-001"
     status_code = 429
     message = "Too many requests. Please try again later."
+
+
+# ─────────────────────────── DATABASE ───────────────────────────
+
+
+class DatabaseError(RailMindException):
+
+    error_code = "RM-DB-001"
+    status_code = 503
+    message = "A database error occurred. Please try again later."

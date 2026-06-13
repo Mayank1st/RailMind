@@ -1,4 +1,8 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+APP_ENV = os.getenv("APP_ENV", "local")
 
 
 class Settings(BaseSettings):
@@ -105,7 +109,7 @@ class Settings(BaseSettings):
     GOOGLE_PROVIDER: str = "google"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", f".env.{APP_ENV}"),
         env_file_encoding="utf-8",
         case_sensitive=True,
     )

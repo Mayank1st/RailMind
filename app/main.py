@@ -14,9 +14,11 @@ from app.core.exceptions import RailMindException
 from app.core.exception_handlers import (
     railmind_exception_handler,
     validation_exception_handler,
+    database_exception_handler,
     unhandled_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import SQLAlchemyError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_pagination import add_pagination
 
@@ -48,6 +50,7 @@ app.add_middleware(
 
 app.add_exception_handler(RailMindException, railmind_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(SQLAlchemyError, database_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(api_router, prefix="/api")

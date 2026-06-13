@@ -24,6 +24,38 @@ alembic upgrade head
 
 ---
 
+## 🌍 Running Migrations per Environment (local / prod)
+
+Alembic **wahi config** padhta hai jo app padhti hai (`alembic/env.py` → `app/config.py` → `settings`). Iska matlab jis DB pe migration chalegi woh **`APP_ENV`** shell variable decide karta hai (default `local`):
+
+| Command | Targets | DB |
+| ------- | ------- | -- |
+| `alembic upgrade head` | local *(default)* | Local Postgres (`localhost:5432`) |
+| `APP_ENV=prod alembic upgrade head` | prod | VM Postgres (tunnel `127.0.0.1:5433`) |
+
+### 🟢 Local (default)
+
+```bash
+alembic current        # kaunsi revision pe ho
+alembic upgrade head   # pending migrations apply
+```
+
+### 🔵 Prod / VM
+
+VM ka Postgres internet pe expose nahi hai (SSH-only) — **pehle tunnel** chalao, phir har command ke aage `APP_ENV=prod`:
+
+```bash
+scripts/db-tunnel.sh                       # localhost:5433 -> VM Postgres (background)
+APP_ENV=prod alembic current               # CONFIRM: VM ki revision dikhni chahiye
+APP_ENV=prod alembic upgrade head          # VM DB pe migrations apply
+```
+
+> **Apply karne se pehle** `APP_ENV=prod alembic current` chala ke confirm karo ki sahi DB pe ho. Tunnel down ho to connection timeout aayega — `scripts/db-tunnel.sh status` se check karo.
+>
+> ⚠️ `APP_ENV` ek **real shell variable** hai, `.env` ke andar nahi. Inline `APP_ENV=prod <cmd>` use karna safest hai (galti se prod pe likhne se bachne ke liye). Server start + env files ki poori detail **project root `README.md`** ke "🌍 Local vs Prod" section mein hai.
+
+---
+
 ## ⚙️ Migration Driver (Important)
 
 * Alembic uses: **`postgresql+psycopg`** (synchronous driver)

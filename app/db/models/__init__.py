@@ -9,3 +9,4 @@ from app.db.models.booking_retry_requests import *
 from app.db.models.payment import *
 from app.db.models.refund import *
 from app.db.models.user_oauth_accounts import *
+from app.db.models.faq import *

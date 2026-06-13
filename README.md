@@ -4,6 +4,66 @@ AI-Powered Railway Reservation System — IRCTC Replica with Intelligent Automat
 
 ---
 
+## 🌍 Local vs Prod — environment switching (`APP_ENV`)
+
+Config **3 files** mein split hai (secrets ek hi jagah, env-specific cheezein alag):
+
+| File | Kya hai | Git |
+|------|---------|-----|
+| `.env` | **Shared** — saare secrets + DB credentials (`DB_NAME` / `DB_USERNAME` / `DB_PASSWORD` / `DB_SCHEMA`) | ignored |
+| `.env.local` | Local overrides — `DB_HOST=localhost`, `DB_PORT=5432`, `DEBUG=true` | ignored |
+| `.env.prod` | Prod overrides — VM DB via SSH tunnel (`DB_HOST=127.0.0.1`, `DB_PORT=5433`) | ignored |
+
+Templates committed hain — copy karke values bharo:
+
+```bash
+cp .sample.env .env
+cp .sample.env.local .env.local
+cp .sample.env.prod .env.prod
+```
+
+**Kaunsa env load hoga** yeh ek **shell variable `APP_ENV`** decide karta hai (kisi `.env` ke *andar* nahi — woh to decide karta hai ki konsi file padhni hai). Default `local`:
+
+| `APP_ENV` | Loads | DB |
+|-----------|-------|-----|
+| *(set nahi)* / `local` | `.env` + `.env.local` | Local Postgres (`localhost:5432`) |
+| `prod` | `.env` + `.env.prod` | VM Postgres (tunnel `127.0.0.1:5433`) |
+
+> Internally: `env_file=(".env", f".env.{APP_ENV}")` — `.env.<env>` value **jeetti** hai. Koi real OS env var (jaise docker-compose ka `DB_HOST=postgres`) dono files se upar jeetta hai, to containers bina change ke chalte hain.
+
+### ▶️ Server start
+
+**Local DB pe (default — kuch set karne ki zarurat nahi):**
+
+```bash
+source venv/bin/activate
+fastapi dev app/main.py            # ya: uvicorn app.main:app --reload
+```
+
+**Prod / VM DB pe:** VM ka Postgres internet pe expose nahi hai (SSH-only), isliye **pehle SSH tunnel** chalao, phir `APP_ENV=prod`:
+
+```bash
+scripts/db-tunnel.sh               # tunnel background mein (start | status | stop | watch)
+APP_ENV=prod fastapi dev app/main.py
+```
+
+> **One-time setup** — tunnel ki connection detail tumhari *local* `~/.ssh/config` me rehti hai (repo me hardcode nahi, taaki infra leak na ho). Ek baar yeh `railmind-db` host add karo (apni values bharo):
+>
+> ```sshconfig
+> Host railmind-db
+>     HostName <your-vm-host>
+>     User <your-ssh-user>
+>     IdentityFile ~/.ssh/<your-key>
+>     LocalForward 5433 localhost:5432
+>     ServerAliveInterval 30
+>     ServerAliveCountMax 3
+>     ExitOnForwardFailure yes
+> ```
+
+> `export APP_ENV=prod` poore terminal session ke liye set kar deta hai; wapas local ke liye `export APP_ENV=local` ya `unset APP_ENV`. **Safer:** inline `APP_ENV=prod <cmd>` — taaki galti se prod DB pe na likho.
+
+---
+
 ## Zaroori steps — sequence mein (Hinglish)
 
 *Neeche wale steps **order mein** follow karo; skip mat karo warna DB, email ya Celery break ho jayega.*
@@ -45,8 +105,11 @@ pip install -r requirements.txt
 
 ### Step 6 — `.env` file (mandatory keys)
 
-- Project root mein **`.env`** banao (agar `.env.example` ho toh copy karke values bharo).
+> **Note:** Config ab **3 files** mein split hai — `.env` (shared secrets) + `.env.local` / `.env.prod` (env-specific). Details + server start upar **"🌍 Local vs Prod"** section mein. Niche wali keys shared `.env` + active `.env.<env>` ka combined set hain.
+
+- Project root mein **`.env`** banao (`cp .sample.env .env`), aur `.env.local` / `.env.prod` bhi (`cp .sample.env.local .env.local`, etc.).
 - **`app/config.py`** jo keys maangta hai woh **exact names** se honi chahiye (`case_sensitive=True` hai).
+- `DB_HOST` / `DB_PORT` ab `.env.local` / `.env.prod` mein hain (env ke hisaab se badalte hain), baaki sab shared `.env` mein.
 
 **Minimum jo set karni hi karni hain:**
 
