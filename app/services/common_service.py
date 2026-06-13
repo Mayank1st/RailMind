@@ -10,6 +10,7 @@ from app.integrations.supabase_client import upload_pdf_to_supabase
 
 
 class CommonService:
+    _stations_cache: list[dict] | None = None
 
     async def calculate_fare(
         self,
@@ -63,12 +64,19 @@ class CommonService:
         )
 
     async def get_all_stations(self, db: AsyncSession) -> list[dict]:
-        result = await db.execute(select(Stations).order_by(Stations.station_code))
-        stations = result.scalars().all()
-        return [
-            {"station_code": station.station_code, "station_name": station.station_name}
-            for station in stations
+        if self._stations_cache is not None:
+            return self._stations_cache
+
+        result = await db.execute(
+            select(Stations.station_code, Stations.station_name).order_by(
+                Stations.station_code
+            )
+        )
+        self._stations_cache = [
+            {"station_code": row.station_code, "station_name": row.station_name}
+            for row in result.all()
         ]
+        return self._stations_cache
 
 
 common_service = CommonService()
