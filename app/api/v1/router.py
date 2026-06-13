@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     train,
     waitlist,
     common,
+    faq,
 )
 
 router = APIRouter()
@@ -31,3 +32,4 @@ router.include_router(fare.router)
 router.include_router(complaint.router)
 router.include_router(admin.router)
 router.include_router(common.router)
+router.include_router(faq.router)
