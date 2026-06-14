@@ -83,3 +83,14 @@ class JourneyDTO(BaseDTO):
             ],
         ),
     ]
+
+
+class FarePreviewDTO(BaseDTO):
+    train_number: Optional[Annotated[str, Field(examples=["12951"])]] = None
+    journey_date: Annotated[date, Field(examples=["2026-05-01"])]
+    from_station: Annotated[str, Field(examples=["NDLS"])]
+    to_station: Annotated[str, Field(examples=["BCT"])]
+    train_class: Annotated[TrainClass, Field(examples=[TrainClass.SLEEPER])]
+    quota: Annotated[Quota, Field(default=Quota.GENERAL, examples=[Quota.GENERAL])]
+    passenger_count: Annotated[int, Field(examples=["2"])]
+    train_type: Annotated[str, Field(examples=["special"])]

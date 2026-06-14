@@ -4,7 +4,7 @@ import random
 import string
 
 from fastapi import status
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from datetime import date
@@ -25,12 +25,12 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 from app.core.constants.payment import PaymentStatus
 from app.core.exceptions import RailMindException
 from app.db.models.booking import BookingPassengers, Bookings, RACSlots
-from app.db.models.train import SeatInventories
+from app.db.models.train import SeatInventories, Trains
 from app.db.models.passengers import Passengers
 from app.db.models.waiting_list import WaitlistEntries
 from app.db.models.train import Seats, Coaches, TrainStations
 from app.db.models.user import Users
-from app.schemas.Request.bookingRequestDTO import CreateBookingDTO
+from app.schemas.Request.bookingRequestDTO import CreateBookingDTO, FarePreviewDTO
 from app.schemas.Response.bookingResponseDTO import GetBookingDetailsByIdResponse
 from app.services.common_service import CommonService
 from app.services.train_service import TrainService
@@ -759,6 +759,42 @@ class BookingService:
         )
 
         return public_url
+
+    async def get_fare_preview(
+        self,
+        payload: FarePreviewDTO,
+        db: AsyncSession,
+    ) -> dict:
+
+        train_data, from_stop, to_stop = await train_service._validate_journey(
+            payload.train_number,
+            payload=payload,
+            db=db,
+        )
+
+        # Per-passenger fare breakdown
+        fare = await common_service.calculate_fare(
+            db=db,
+            train_type=train_data.train_type,
+            train_class=payload.train_class,
+            from_stop=from_stop,
+            to_stop=to_stop,
+            quota=payload.quota,
+            include_irctc_charge=True,
+        )
+
+        count = payload.passenger_count
+
+        return {
+            "base_fare": fare.base_fare,
+            "passenger_count": count,
+            "reservation_charge": fare.reservation_charge,
+            "superfast_charge": fare.superfast_charge,
+            "tatkal_charge": fare.tatkal_charge,
+            "gst": fare.gst_amount,
+            "irctc_charge": fare.irctc_service_charge,
+            "total_fare": round(fare.total_fare * count, 2),
+        }
 
     @staticmethod
     def _format_journey_duration(from_stop, to_stop) -> str:
