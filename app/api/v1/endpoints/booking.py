@@ -7,7 +7,11 @@ from app.core.constants.booking import JourneyActionType, BookingJourneyFilter
 from app.core.pagination import BookingParams, paginated
 from app.services.booking_retry_service import BookingRetryService
 from app.services.booking_retry_service import IMMEDIATE_RETRY_INTERVALS
-from app.schemas.Request.bookingRequestDTO import CreateBookingDTO, JourneyDTO
+from app.schemas.Request.bookingRequestDTO import (
+    CreateBookingDTO,
+    JourneyDTO,
+    FarePreviewDTO,
+)
 from app.api.deps import get_current_user, get_db, get_redis
 from app.core.response import created, ok
 from app.tasks.booking_retry_tasks import task_auto_retry_booking
@@ -33,6 +37,18 @@ async def create_booking(
         data=data,
         message=f"Booking for train {payload.train_number} created successfully.",
     )
+
+
+@router.get("/fare-preview")
+async def get_fare_preview(
+    payload: FarePreviewDTO,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await booking_service.get_fare_preview(
+        payload,
+        db=db,
+    )
+    return ok(data=data, message="Fare Preview fetched successfully.")
 
 
 @router.get("/")
