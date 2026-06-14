@@ -39,7 +39,7 @@ async def create_booking(
     )
 
 
-@router.get("/fare-preview")
+@router.post("/fare-preview")
 async def get_fare_preview(
     payload: FarePreviewDTO,
     db: AsyncSession = Depends(get_db),
