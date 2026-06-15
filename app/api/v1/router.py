@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     waitlist,
     common,
     faq,
+    search_history,
 )
 
 router = APIRouter()
@@ -33,3 +34,4 @@ router.include_router(complaint.router)
 router.include_router(admin.router)
 router.include_router(common.router)
 router.include_router(faq.router)
+router.include_router(search_history.router)

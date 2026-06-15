@@ -1,7 +1,9 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from fastapi_filter import FilterDepends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_current_user, get_db, get_redis
+from app.api.deps import get_current_user, get_current_user_optional, get_db, get_redis
 from app.core.response import APIResponse, created, ok
 from app.core.pagination import Params, paginated
 
@@ -9,14 +11,34 @@ from app.core.pagination import Params, paginated
 from app.services.train_service import TrainService
 from app.schemas.train import SearchTrainDTO, CheckSeatAvailabilityDTO
 from app.schemas.Request.trainFilterDTO import TrainFilter
+from app.tasks.search_history_tasks import task_log_search_history
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/train", tags=["Train"])
 train_service = TrainService()
 
 
 @router.post("/search")
-async def search_trains(payload: SearchTrainDTO, db: AsyncSession = Depends(get_db)):
+async def search_trains(
+    payload: SearchTrainDTO,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict | None = Depends(get_current_user_optional),
+):
     data = await train_service.search_trains(payload, db)
+    if current_user and payload.toStationCode:
+        try:
+            task_log_search_history.delay(
+                user_id=current_user["sub"],
+                from_code=payload.fromStationCode.upper(),
+                to_code=payload.toStationCode.upper(),
+                journey_date=None,
+                train_class=payload.train_class.value if payload.train_class else None,
+                quota=payload.quota.value if payload.quota else None,
+            )
+        except Exception:
+            logger.warning("failed to enqueue search-history log", exc_info=True)
+
     return ok(data=data, message="Train Details Fetched Successfully.")
 
 

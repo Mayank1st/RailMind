@@ -14,6 +14,7 @@ __all__ = [
     "get_db",
     "get_redis",
     "get_current_user",
+    "get_current_user_optional",
     "get_current_user_with_csrf",
     "rate_limit",
 ]
@@ -113,6 +114,25 @@ async def get_current_user(
             status_code=401,
         )
 
+    return payload
+
+
+# ─── Current User (optional) ──────────────────────────────────────────────────
+
+
+async def get_current_user_optional(
+    access_token: str = Cookie(None, alias="access_token"),
+    redis: Redis = Depends(get_redis),
+) -> dict | None:
+    if not access_token:
+        return None
+    try:
+        payload = decode_access_token(access_token)
+    except JWTError:
+        return None
+    jti = payload.get("jti")
+    if jti and await redis.exists(f"blacklist:{jti}"):
+        return None
     return payload
 
 

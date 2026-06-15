@@ -1,4 +1,6 @@
 from celery import Celery
+from celery.schedules import crontab
+
 from app.config import settings
 
 
@@ -34,6 +36,14 @@ celery_app.conf.update(
     task_eager_propagates=settings.CELERY_TASK_ALWAYS_EAGER,
 )
 
+# Periodic jobs — only fire when a `celery beat` process is running.
+celery_app.conf.beat_schedule = {
+    "cleanup-search-histories-daily": {
+        "task": "search_history_tasks.task_cleanup_search_histories",
+        "schedule": crontab(hour=3, minute=0),  # 03:00 daily
+    },
+}
+
 
 def _register_task_modules() -> None:
     """Import after `celery_app` exists so @celery_app.task binds to this app (not amqp default)."""
@@ -41,6 +51,7 @@ def _register_task_modules() -> None:
     import app.tasks.booking_tasks  # noqa: F401
     import app.tasks.ai_tasks  # noqa: F401
     import app.tasks.booking_retry_tasks  # noqa: F401
+    import app.tasks.search_history_tasks  # noqa: F401
 
 
 _register_task_modules()
