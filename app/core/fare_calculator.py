@@ -64,7 +64,9 @@ class FareBreakdown:
     quota: str
 
     # ── Components ────────────────────────────────────────────────────────────
-    base_fare: float = 0.0  # after telescopic rebate + rounding
+    base_fare: float = 0.0  # NET — after telescopic rebate + rounding
+    gross_base_fare: float = 0.0  # PRE-rebate base (distance × per_km, rounded ₹5)
+    telescopic_discount: float = 0.0  # gross_base_fare − base_fare (rebate in ₹)
     reservation_charge: float = 0.0  # flat fee per class
     superfast_charge: float = 0.0  # 30% of base, min charge applies
     tatkal_charge: float = 0.0  # tatkal_multiplier × base - base
@@ -81,17 +83,21 @@ class FareBreakdown:
     )
 
     @property
-    def total_fare(self) -> float:
-        """Final amount passenger pays — rounded to nearest ₹1."""
-        total = (
+    def subtotal(self) -> float:
+        """Pre-GST, pre-service-charge total: net base + surcharges − concession."""
+        return round(
             self.base_fare
             + self.reservation_charge
             + self.superfast_charge
             + self.tatkal_charge
-            - self.concession_amount
-            + self.gst_amount
-            + self.irctc_service_charge
+            - self.concession_amount,
+            2,
         )
+
+    @property
+    def total_fare(self) -> float:
+        """Final amount passenger pays — rounded to nearest ₹1."""
+        total = self.subtotal + self.gst_amount + self.irctc_service_charge
         return round(total, 0)
 
     def as_dict(self) -> dict:
@@ -100,6 +106,9 @@ class FareBreakdown:
             "train_class": self.train_class,
             "quota": self.quota,
             "base_fare": self.base_fare,
+            "gross_base_fare": self.gross_base_fare,
+            "telescopic_discount": self.telescopic_discount,
+            "subtotal": self.subtotal,
             "reservation_charge": self.reservation_charge,
             "superfast_charge": self.superfast_charge,
             "tatkal_charge": self.tatkal_charge,
@@ -182,8 +191,13 @@ class FareCalculator:
             quota=quota,
         )
 
-        # Step 1 — Base fare (telescopic rebate applied)
+        # Step 1 — Base fare (telescopic rebate applied), plus the gross/rebate
+        # split so callers can show the rebate as a separate line item.
         breakdown.base_fare = self._calculate_base_fare(distance_km)
+        breakdown.gross_base_fare = self._calculate_gross_base_fare(distance_km)
+        breakdown.telescopic_discount = round(
+            max(0.0, breakdown.gross_base_fare - breakdown.base_fare), 2
+        )
 
         # Step 2 — Superfast surcharge
         if self._is_superfast_train():
@@ -253,6 +267,15 @@ class FareCalculator:
 
         # Apply minimum fare floor
         return float(max(rounded, self._rule.minimum_fare))
+
+    def _calculate_gross_base_fare(self, distance_km: int) -> float:
+        """
+        Base fare BEFORE telescopic rebate — distance × per-km rate, rounded to
+        nearest ₹5. Exposed only for display (fare enquiry shows the rebate as a
+        line item); the rebate-applied base_fare is what feeds total_fare.
+        """
+        raw = distance_km * self._rule.base_fare_per_km
+        return float(self._round_to_nearest_5(raw))
 
     def _calculate_superfast_charge(self, base_fare: float) -> float:
         """
