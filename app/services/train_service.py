@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination import Params
 from fastapi_pagination.ext.sqlalchemy import apaginate
 from app.core.exceptions import RailMindException
+from app.services.station_cluster_service import station_cluster_service
 from app.core.constants.booking import PassengerStatus
 from app.schemas.Request.trainFilterDTO import TrainFilter
 
@@ -71,11 +72,13 @@ class TrainService:
             "destination_station": train.destination_station.station_code,
         }
 
-    async def search_trains(
+    async def search_trains_list(
         self,
         payload: SearchTrainDTO,
         db: AsyncSession,
     ) -> dict:
+        """Core search — returns the full processed train list (no pagination).
+        Used by the NLP search path; the paginated `search_trains` wraps this."""
         try:
             # ── 1. Aliases ───────────────────────────────────────────────────
             TS1 = aliased(TrainStations)
@@ -116,6 +119,7 @@ class TrainService:
                 S1.station_code.label("from_code"),
                 S1.station_name.label("from_name"),
                 TS1.departure_time.label("departs"),
+                TS1.day_number.label("dep_day"),
                 TS1.sequence_number.label("from_seq"),
             ]
 
@@ -125,6 +129,7 @@ class TrainService:
                         S2.station_code.label("to_code"),
                         S2.station_name.label("to_name"),
                         TS2.arrival_time.label("arrives"),
+                        TS2.day_number.label("arr_day"),
                         TS2.sequence_number.label("to_seq"),
                         (TS2.distance_km - TS1.distance_km).label("journey_km"),
                     ]
@@ -135,6 +140,7 @@ class TrainService:
                         null().label("to_code"),
                         null().label("to_name"),
                         null().label("arrives"),
+                        null().label("arr_day"),
                         null().label("to_seq"),
                         null().label("journey_km"),
                     ]
@@ -148,9 +154,25 @@ class TrainService:
                 .join(S1, S1.id == TS1.station_id)
             )
 
+            # Nearby-stations expansion — when on, match any station in the
+            # source/destination clusters; otherwise just the exact code.
+            from_req = payload.fromStationCode.upper()
+            to_req = payload.toStationCode.upper() if payload.toStationCode else None
+            if payload.nearby_stations:
+                await station_cluster_service.ensure_loaded(db)
+                from_codes = station_cluster_service.expand_station_set(from_req)
+                to_codes = (
+                    station_cluster_service.expand_station_set(to_req)
+                    if to_req
+                    else None
+                )
+            else:
+                from_codes = {from_req}
+                to_codes = {to_req} if to_req else None
+
             # Base conditions
             conditions = [
-                S1.station_code == payload.fromStationCode.upper(),
+                S1.station_code.in_(from_codes),
                 Trains.is_active == True,
             ]
 
@@ -167,12 +189,16 @@ class TrainService:
                 )
                 conditions.append(coach_exists)
 
+            # Train type filter (express / superfast / rajdhani / ...)
+            if payload.train_type:
+                conditions.append(Trains.train_type == payload.train_type.lower())
+
             # Destination joins
             if payload.toStationCode:
                 stmt = stmt.join(TS2, TS2.train_id == Trains.id).join(
                     S2, S2.id == TS2.station_id
                 )
-                conditions.append(S2.station_code == payload.toStationCode.upper())
+                conditions.append(S2.station_code.in_(to_codes))
                 conditions.append(TS1.sequence_number < TS2.sequence_number)
 
             # Finalize
@@ -195,6 +221,11 @@ class TrainService:
                 if runs_today is False:
                     continue
 
+                # Exact = the train actually departs from / arrives at the
+                # requested codes (vs a nearby cluster member).
+                exact_to = (to_req is None) or (row.to_code == to_req)
+                is_exact_match = (row.from_code == from_req) and exact_to
+
                 trains.append(
                     {
                         "train_number": row.train_number,
@@ -207,12 +238,31 @@ class TrainService:
                         "departs": row.departs,
                         "arrives": row.arrives,
                         "journey_km": row.journey_km,
+                        "duration_minutes": self._duration_minutes(
+                            row.departs, row.arrives, row.dep_day, row.arr_day
+                        ),
                         "runs_on_days": runs_on_days,
                         "runs_today": runs_today,
+                        "is_exact_match": is_exact_match,
                     }
                 )
 
-            # ── 6. Return ────────────────────────────────────────────────────
+            # ── 6. Post-filters + sort (computed fields, so done in Python) ───
+            if payload.exact_only:
+                trains = [t for t in trains if t["is_exact_match"]]
+
+            if payload.sort_by == "duration":
+                # unknown duration sinks to the bottom
+                trains.sort(
+                    key=lambda t: (
+                        t["duration_minutes"]
+                        if t["duration_minutes"] is not None
+                        else 10**9
+                    )
+                )
+            # default "departure" — SQL already ordered by departure_time
+
+            # ── 7. Return full list (pagination handled by `search_trains`) ───
             return {
                 "source": "local_db",
                 "total": len(trains),
@@ -230,6 +280,53 @@ class TrainService:
                 message="Failed to fetch train data",
                 status_code=500,
             )
+
+    async def search_trains(
+        self,
+        payload: SearchTrainDTO,
+        db: AsyncSession,
+    ) -> dict:
+        """Paginated search for the HTTP endpoint — page/size come from the
+        payload. Slices the bounded `search_trains_list` result in-memory."""
+        full = await self.search_trains_list(payload, db)
+        trains = full["trains"]
+        total = len(trains)
+        size = payload.size
+        page_no = payload.page
+        start = (page_no - 1) * size
+        items = trains[start : start + size]
+        pages = (total + size - 1) // size if size else 0
+
+        return {
+            "items": items,
+            "meta": {
+                "total": total,
+                "page": page_no,
+                "size": size,
+                "pages": pages,
+                "from_time": full["from_time"],
+                "to_time": full["to_time"],
+                "nearby_stations": payload.nearby_stations,
+            },
+        }
+
+    @staticmethod
+    def _duration_minutes(departs, arrives, dep_day, arr_day) -> int | None:
+        """Journey duration in minutes from HH:MM[:SS] times + day numbers.
+        None when data is missing/unparseable (e.g. destination-less search)."""
+        if not departs or not arrives or dep_day is None or arr_day is None:
+            return None
+        try:
+            dep_min = int(departs[:2]) * 60 + int(departs[3:5])
+            arr_min = int(arrives[:2]) * 60 + int(arrives[3:5])
+        except (ValueError, IndexError):
+            return None
+        diff = ((int(arr_day) - 1) * 1440 + arr_min) - (
+            (int(dep_day) - 1) * 1440 + dep_min
+        )
+        if diff < 0:
+            diff += 1440  # guard against bad day_number data
+        return diff
 
     async def get_train_details_by_train_number(
         self, train_number: int, db: AsyncSession
