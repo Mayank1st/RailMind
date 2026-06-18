@@ -80,6 +80,12 @@ class Settings(BaseSettings):
     RAPIDAPI_KEY: str
     RAPIDAPI_HOST: str
 
+    # RAPID API — live train running status (provider: train-running-api)
+    RAPIDAPI_LIVE_STATUS_KEY: str = ""
+    RAPIDAPI_LIVE_STATUS_HOST: str = "train-running-api.p.rapidapi.com"
+    RAPIDAPI_LIVE_STATUS_BASE_URL: str = "https://train-running-api.p.rapidapi.com"
+    RAPIDAPI_LIVE_STATUS_TIMEOUT_SECONDS: int = 15
+
     # GEMINI API
     GEMINI_API_KEY: str
     GEMINI_API_KEY_NAME: str

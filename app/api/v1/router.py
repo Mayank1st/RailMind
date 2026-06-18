@@ -16,6 +16,8 @@ from app.api.v1.endpoints import (
     common,
     faq,
     search_history,
+    station,
+    live_status,
 )
 
 router = APIRouter()
@@ -35,3 +37,5 @@ router.include_router(admin.router)
 router.include_router(common.router)
 router.include_router(faq.router)
 router.include_router(search_history.router)
+router.include_router(station.router)
+router.include_router(live_status.router)

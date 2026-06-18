@@ -25,7 +25,7 @@ async def search_trains(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_optional),
 ):
-    data = await train_service.search_trains(payload, db)
+    result = await train_service.search_trains(payload, db)
     if current_user and payload.toStationCode:
         try:
             task_log_search_history.delay(
@@ -39,7 +39,11 @@ async def search_trains(
         except Exception:
             logger.warning("failed to enqueue search-history log", exc_info=True)
 
-    return ok(data=data, message="Train Details Fetched Successfully.")
+    return ok(
+        data=result["items"],
+        message="Train Details Fetched Successfully.",
+        meta=result["meta"],
+    )
 
 
 # NOTE: must be registered before "/{train_number}" so "list" isn't captured

@@ -60,7 +60,10 @@ class NlpSearchService:
             hours=parsed_hour,
         )
 
-        search_train_res = await train_service.search_trains(search_train_payload, db)
+        # core (un-paginated) variant — NLP enriches the full list itself
+        search_train_res = await train_service.search_trains_list(
+            search_train_payload, db
+        )
 
         async def enrich(train):
             payload = CheckSeatAvailabilityDTO(
