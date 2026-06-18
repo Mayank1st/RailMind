@@ -122,3 +122,24 @@ class DatabaseError(RailMindException):
     error_code = "RM-DB-001"
     status_code = 503
     message = "A database error occurred. Please try again later."
+
+
+# ─────────────────────────── LIVE STATUS ───────────────────────────
+
+
+class LiveStatusUnavailableError(RailMindException):
+    error_code = "RM-LIVE-001"
+    status_code = 503
+    message = "Live tracking temporarily unavailable. Try again shortly."
+
+
+class LiveTrainNotFoundError(RailMindException):
+    error_code = "RM-LIVE-002"
+    status_code = 404
+    message = "Train number not found"
+
+
+class LiveTrainNotRunningError(RailMindException):
+    error_code = "RM-LIVE-003"
+    status_code = 422
+    message = "Train does not run on this date"
