@@ -2,6 +2,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 from app.config import settings
+from app.core.constants.chart_preparation import CHART_CHECK_INTERVAL_MINUTES
 
 
 def _redis_broker_url() -> str:
@@ -42,6 +43,10 @@ celery_app.conf.beat_schedule = {
         "task": "search_history_tasks.task_cleanup_search_histories",
         "schedule": crontab(hour=3, minute=0),  # 03:00 daily
     },
+    "check-chart-preparation-due": {
+        "task": "chart_preparation_tasks.task_check_chart_preparation_due",
+        "schedule": crontab(minute=f"*/{CHART_CHECK_INTERVAL_MINUTES}"),
+    },
 }
 
 
@@ -52,6 +57,7 @@ def _register_task_modules() -> None:
     import app.tasks.ai_tasks  # noqa: F401
     import app.tasks.booking_retry_tasks  # noqa: F401
     import app.tasks.search_history_tasks  # noqa: F401
+    import app.tasks.chart_preparation_tasks  # noqa: F401
 
 
 _register_task_modules()

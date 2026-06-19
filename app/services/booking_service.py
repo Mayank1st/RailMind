@@ -1483,8 +1483,13 @@ class BookingService:
         db: AsyncSession,
         inventory: SeatInventories,
         freed_count: int,
+        allow_wl_to_rac: bool = True,
     ) -> None:
-        """CNF cancel → RAC promote → WL promote."""
+        """CNF cancel → RAC promote → WL promote.
+
+        allow_wl_to_rac=False (chart Stage 2) does RAC→CNF only and skips the
+        WL→RAC step (Stage 1 has already cleared the waitlist).
+        """
         for _ in range(freed_count):
             # RAC/1 → CNF
             rac_result = await db.execute(
@@ -1510,6 +1515,10 @@ class BookingService:
                 rac_bp = bp_result.scalar_one_or_none()
                 if rac_bp:
                     rac_bp.passenger_status = "CNF"
+                    # The freed CNF seat is now taken by the promoted RAC
+                    # passenger — without this the inventory shows a phantom
+                    # free seat (overbooking risk in both cancel and chart prep).
+                    inventory.available_confirmed_seats -= 1
                     rac_slot.passenger_1_booking_passenger_id = (
                         rac_slot.passenger_2_booking_passenger_id
                     )
@@ -1518,7 +1527,10 @@ class BookingService:
                     inventory.available_rac_slots += 1
 
                     # WL/1 → RAC
-                    await self._promote_wl_to_rac(db=db, inventory=inventory, count=1)
+                    if allow_wl_to_rac:
+                        await self._promote_wl_to_rac(
+                            db=db, inventory=inventory, count=1
+                        )
 
     async def _promote_wl_to_rac(
         self,

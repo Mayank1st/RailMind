@@ -14,7 +14,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import BaseModel, DB_SCHEMA
 
-
 # ──────────────────────────────────────────────────────────────────────────────
 #  WAITLIST ENTRIES
 # ──────────────────────────────────────────────────────────────────────────────
@@ -58,11 +57,15 @@ class WaitlistEntries(BaseModel):
     )
     is_promoted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     promoted_to: Mapped[str | None] = mapped_column(String(5), nullable=True)
-    promoted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    promoted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     is_auto_cancelled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
-    auto_cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    auto_cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # ── Relationships ─────────────────────────────────────────────────────────
     booking = relationship("Bookings")

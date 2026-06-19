@@ -1,15 +1,15 @@
 import json
 import re
 import asyncio
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
+from app.core.constants.booking import MAX_ADVANCE_BOOKING_DAYS
 from app.services.train_service import TrainService
 from app.utils.helpers import parse_datetime_flexible
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.integrations.gemini_client import gemini_client
 from app.ai.prompts.nlp_search_prompts import nlp_search_prompt
 from app.schemas.train import CheckSeatAvailabilityDTO, SearchTrainDTO
-
 
 train_service = TrainService()
 
@@ -20,12 +20,6 @@ class NlpSearchService:
     def extract_json_from_llm(text: str) -> dict:
         cleaned = re.sub(r"```json|```", "", text).strip()
         return json.loads(cleaned)
-
-    @staticmethod
-    def hours_from_now(target: datetime) -> float:
-        now = datetime.now()
-        diff = target - now
-        return round(diff.total_seconds() / 3600, 2)
 
     async def get_nlp_search(self, plain_text: str, current_user_id, db: AsyncSession):
         today = datetime.now()
@@ -45,19 +39,22 @@ class NlpSearchService:
 
         print("parsed_data===============>", parsed_data)
 
-        journey_date = parsed_data.get("journey_date")
-
-        parsed_hour = None
-        if journey_date:
-            parsed_datetime = parse_datetime_flexible(journey_date)
-            parsed_hour = int(self.hours_from_now(parsed_datetime))
+        journey_date_raw = parsed_data.get("journey_date")
+        today_date = date.today()
+        if journey_date_raw:
+            jd = parse_datetime_flexible(journey_date_raw).date()
         else:
-            parsed_hour = None
+            jd = today_date
+        # Clamp into the valid search window so the DTO validator (which rejects
+        # past / >120-day dates) never raises on an LLM-parsed date.
+        jd = max(
+            today_date, min(jd, today_date + timedelta(days=MAX_ADVANCE_BOOKING_DAYS))
+        )
 
         search_train_payload = SearchTrainDTO(
             fromStationCode=parsed_data.get("from_station"),
             toStationCode=parsed_data.get("to_station"),
-            hours=parsed_hour,
+            journey_date=jd,
         )
 
         # core (un-paginated) variant — NLP enriches the full list itself

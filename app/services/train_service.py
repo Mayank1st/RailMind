@@ -1,9 +1,8 @@
-import pytz
 import logger
 from fastapi import status
 from typing import Optional
 from sqlalchemy.orm import aliased, selectinload
-from sqlalchemy import and_, select, or_, null, exists
+from sqlalchemy import and_, select, null, exists
 from app.db.models.train import (
     Trains,
     TrainStations,
@@ -13,7 +12,8 @@ from app.db.models.train import (
     Seats,
 )
 from app.db.models.booking import BookingPassengers, Bookings
-from datetime import datetime
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from app.schemas.train import (
     SearchTrainDTO,
     CheckSeatAvailabilityDTO,
@@ -30,8 +30,6 @@ from app.core.exceptions import RailMindException
 from app.services.station_cluster_service import station_cluster_service
 from app.core.constants.booking import PassengerStatus
 from app.schemas.Request.trainFilterDTO import TrainFilter
-
-from app.utils.helpers import get_time_after_hours
 
 
 class TrainService:
@@ -86,29 +84,17 @@ class TrainService:
             TS2 = aliased(TrainStations)
             S2 = aliased(Stations)
 
-            # ── 2. Time window filter ────────────────────────────────────────
-            ist = pytz.timezone("Asia/Kolkata")
-            now = datetime.now(ist)
-
-            if payload.hours >= 24:
-                # 24+ hours = poora din, no time filter
-                time_filter = True
-                from_time = "all_day"
-                to_time = "all_day"
+            # ── 2. Candidate dates (Flexible Dates expands ±flex_days) ───────
+            requested_date = payload.journey_date
+            if payload.flexible_dates:
+                candidate_dates = self._expand_dates(requested_date, payload.flex_days)
             else:
-                from_time = now.strftime("%H:%M:%S")
-                to_time = get_time_after_hours(payload.hours)
-
-                if from_time <= to_time:
-                    time_filter = and_(
-                        TS1.departure_time >= from_time,
-                        TS1.departure_time <= to_time,
-                    )
-                else:
-                    time_filter = or_(
-                        TS1.departure_time >= from_time,
-                        TS1.departure_time <= to_time,
-                    )
+                candidate_dates = [requested_date]
+            # (date, weekday, offset-from-requested)
+            date_specs = [
+                (d, d.strftime("%a").lower(), (d - requested_date).days)
+                for d in candidate_dates
+            ]
 
             # ── 3. Select fields ─────────────────────────────────────────────
             select_fields = [
@@ -176,10 +162,6 @@ class TrainService:
                 Trains.is_active == True,
             ]
 
-            # Time filter — sirf hours < 24 pe apply
-            if time_filter is not True:
-                conditions.append(time_filter)
-
             # Train class filter — Coaches EXISTS
             if payload.train_class:
                 coach_exists = (
@@ -206,68 +188,77 @@ class TrainService:
             result = await db.execute(stmt)
             rows = result.all()
 
-            # ── 5. Filter by running day ─────────────────────────────────────
-            today = now.strftime("%a").lower()
-
+            # ── 5. Filter to trains running on the journey date's weekday ────
             trains = []
             for row in rows:
                 runs_on_days = row.runs_on_days or []
 
-                if not runs_on_days:
-                    runs_today = None
-                else:
-                    runs_today = today in runs_on_days
-
-                if runs_today is False:
-                    continue
-
                 # Exact = the train actually departs from / arrives at the
-                # requested codes (vs a nearby cluster member).
+                # requested codes (vs a nearby cluster member). Date-independent.
                 exact_to = (to_req is None) or (row.to_code == to_req)
                 is_exact_match = (row.from_code == from_req) and exact_to
-
-                trains.append(
-                    {
-                        "train_number": row.train_number,
-                        "train_name": row.train_name,
-                        "train_type": row.train_type,
-                        "from_station": row.from_code,
-                        "from_name": row.from_name,
-                        "to_station": row.to_code,
-                        "to_name": row.to_name,
-                        "departs": row.departs,
-                        "arrives": row.arrives,
-                        "journey_km": row.journey_km,
-                        "duration_minutes": self._duration_minutes(
-                            row.departs, row.arrives, row.dep_day, row.arr_day
-                        ),
-                        "runs_on_days": runs_on_days,
-                        "runs_today": runs_today,
-                        "is_exact_match": is_exact_match,
-                    }
+                duration = self._duration_minutes(
+                    row.departs, row.arrives, row.dep_day, row.arr_day
                 )
+
+                # One result entry per candidate date the train runs on.
+                for d, weekday, offset in date_specs:
+                    if not runs_on_days:
+                        # Unknown schedule — surface once, only on requested date.
+                        if offset != 0:
+                            continue
+                        runs_today = None
+                    elif weekday not in runs_on_days:
+                        continue  # doesn't run on this date's weekday
+                    else:
+                        runs_today = True
+
+                    trains.append(
+                        {
+                            "train_number": row.train_number,
+                            "train_name": row.train_name,
+                            "train_type": row.train_type,
+                            "from_station": row.from_code,
+                            "from_name": row.from_name,
+                            "to_station": row.to_code,
+                            "to_name": row.to_name,
+                            "departs": row.departs,
+                            "arrives": row.arrives,
+                            "journey_km": row.journey_km,
+                            "duration_minutes": duration,
+                            "runs_on_days": runs_on_days,
+                            "runs_today": runs_today,
+                            "is_exact_match": is_exact_match,
+                            "journey_date": d.isoformat(),
+                            "date_offset_days": offset,
+                            "is_requested_date": offset == 0,
+                        }
+                    )
 
             # ── 6. Post-filters + sort (computed fields, so done in Python) ───
             if payload.exact_only:
                 trains = [t for t in trains if t["is_exact_match"]]
 
-            if payload.sort_by == "duration":
-                # unknown duration sinks to the bottom
-                trains.sort(
-                    key=lambda t: (
+            # Flexible: requested date first (offset 0), then ±1, ±2 …; within
+            # the same offset, by sort_by (departure | duration).
+            def _sort_key(t):
+                primary = abs(t["date_offset_days"]) if payload.flexible_dates else 0
+                if payload.sort_by == "duration":
+                    secondary = (
                         t["duration_minutes"]
                         if t["duration_minutes"] is not None
                         else 10**9
                     )
-                )
-            # default "departure" — SQL already ordered by departure_time
+                else:
+                    secondary = t["departs"] or "99:99:99"
+                return (primary, secondary)
+
+            trains.sort(key=_sort_key)
 
             # ── 7. Return full list (pagination handled by `search_trains`) ───
             return {
-                "source": "local_db",
+                "journey_date": payload.journey_date.isoformat(),
                 "total": len(trains),
-                "from_time": from_time,
-                "to_time": to_time,
                 "trains": trains,
             }
 
@@ -304,11 +295,22 @@ class TrainService:
                 "page": page_no,
                 "size": size,
                 "pages": pages,
-                "from_time": full["from_time"],
-                "to_time": full["to_time"],
+                "journey_date": full["journey_date"],
                 "nearby_stations": payload.nearby_stations,
+                "flexible_dates": payload.flexible_dates,
+                "flex_days": payload.flex_days if payload.flexible_dates else 0,
             },
         }
+
+    @staticmethod
+    def _expand_dates(journey_date: date, flex_days: int) -> list[date]:
+        """journey_date ± flex_days, dropping any date before today (IST)."""
+        today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+        return [
+            d
+            for off in range(-flex_days, flex_days + 1)
+            if (d := journey_date + timedelta(days=off)) >= today
+        ]
 
     @staticmethod
     def _duration_minutes(departs, arrives, dep_day, arr_day) -> int | None:
