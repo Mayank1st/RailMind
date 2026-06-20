@@ -27,6 +27,7 @@ from app.utils.helpers import get_utc_timezone
 from app.domain.station.station_service.station_cluster_service import (
     preload_station_clusters,
 )
+from app.domain.common.common_service.common_service import preload_fare_rules
 
 
 @asynccontextmanager
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
     await create_schema_if_not_exists()
     print("✅ Database & Schema ready.")
     await preload_station_clusters()
+    await preload_fare_rules()
 
     yield
     print("🛑 Shutting down application...")

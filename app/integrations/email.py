@@ -26,7 +26,9 @@ conf = ConnectionConfig(
 )
 
 
-async def send_email(to: str, subject: str, body: str) -> None:
+async def send_email(
+    to: str, subject: str, body: str, attachments: list | None = None
+) -> None:
     logger.info(
         "Email send start: to=%s subject=%r via %s:%s",
         to,
@@ -39,6 +41,7 @@ async def send_email(to: str, subject: str, body: str) -> None:
         recipients=[to],
         body=body,
         subtype="html",
+        attachments=attachments or [],
     )
     fm = FastMail(conf)
     try:

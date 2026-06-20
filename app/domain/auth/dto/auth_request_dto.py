@@ -233,6 +233,7 @@ class LoginRequestDTO(BaseDTO):
     email: Optional[str] = None
     username: Optional[str] = None
     password: str
+    remember_me: bool = False  # ON → persistent login; OFF → session cookie
 
 
 # -- SendOtp -------------------------------------------------
