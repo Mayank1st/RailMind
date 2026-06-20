@@ -59,7 +59,9 @@ async def google_auth(
 ):
     service = GoogleAuthService(db)
     user, auth_result = await service.authenticate_with_google(payload.id_token)
-    await auth_service.issue_session(user, response, redis)
+    await auth_service.issue_session(
+        user, response, redis, remember_me=payload.remember_me
+    )
 
     message = (
         "Account created via Google."

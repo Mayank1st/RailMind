@@ -22,6 +22,7 @@ from app.domain.payment.dto.payment_request_dto import (
     PaymentProcessRequestDTO,
 )
 from app.domain.booking.booking_service.booking_service import booking_service
+from app.tasks.notification_tasks import task_send_booking_confirmation
 
 
 class PaymentService:
@@ -220,6 +221,8 @@ class PaymentService:
         await db.commit()
         await db.refresh(payment)
         await db.refresh(booking)
+
+        task_send_booking_confirmation.delay(str(booking.id))
 
         return payment, booking
 

@@ -183,8 +183,9 @@ class BookingService:
             current_user_id=current_user_id,
         )
 
-        # Step 9 — Notification Celery task (commented until tasks are ready)
-        # task_send_booking_confirmation.delay(str(booking.id))
+        # Step 9 — Confirmation email is NOT sent here: booking is still
+        # PAYMENT_PENDING. It's dispatched after payment success in
+        # PaymentService.process_payment (task_send_booking_confirmation).
 
         return {
             "pnr_number": pnr_number,
@@ -592,12 +593,13 @@ class BookingService:
             },
         }
 
-    async def download_receipt(
+    async def build_ticket_payload(
         self,
         booking_id: str,
-        current_user_id,
         db: AsyncSession,
-    ) -> dict:
+    ) -> tuple[dict, Bookings]:
+        """Load booking + assemble the ticket dict. Shared by the receipt
+        download and the confirmation email. Returns (ticket_payload, booking)."""
 
         result = await db.execute(
             select(Bookings)
@@ -746,7 +748,16 @@ class BookingService:
             },
         }
 
-        # ── PDF generate karo ───────────────────────────────────────────────────
+        return ticket_payload, booking
+
+    async def download_receipt(
+        self,
+        booking_id: str,
+        current_user_id,
+        db: AsyncSession,
+    ) -> dict:
+        ticket_payload, booking = await self.build_ticket_payload(booking_id, db)
+
         # build_ticket_pdf in-memory canvas se PDF ke raw bytes return karta hai
         # (koi file disk pe likhne ki zaroorat nahi).
         pdf_bytes = build_ticket_pdf(ticket=ticket_payload)

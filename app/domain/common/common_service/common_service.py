@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import status
@@ -6,11 +8,15 @@ from app.core.fare_calculator import FareCalculator, FareBreakdown
 from app.db.models.booking import FareRules
 from app.db.models.train import TrainStations, Stations
 from app.core.exceptions import RailMindException
+from app.db.session import async_session_local
 from app.integrations.supabase_client import upload_pdf_to_supabase
+
+logger = logging.getLogger(__name__)
 
 
 class CommonService:
     _stations_cache: list[dict] | None = None
+    _fare_rules_cache: dict[str, FareRules] | None = None  # keyed by train_class
 
     async def calculate_fare(
         self,
@@ -26,11 +32,8 @@ class CommonService:
         pt_multiplier: float | None = None,
     ) -> FareBreakdown:
 
-        # ── FareRule fetch karo ───────────────────────────────────────────────
-        result = await db.execute(
-            select(FareRules).where(FareRules.train_class == train_class)
-        )
-        fare_rule = result.scalar_one_or_none()
+        # ── FareRule fetch karo (in-memory cache se — 8 immutable rows) ───────
+        fare_rule = await self.get_fare_rule(db, train_class)
 
         if not fare_rule:
             raise RailMindException(
@@ -63,6 +66,29 @@ class CommonService:
             pt_multiplier=pt_multiplier,
         )
 
+    # ── FareRules cache (master data — 8 rows, prod me kabhi change nahi hota) ─
+    async def _load_fare_rules(self, db: AsyncSession) -> dict[str, FareRules]:
+        if self._fare_rules_cache is not None:
+            return self._fare_rules_cache
+
+        result = await db.execute(select(FareRules))
+        rules = result.scalars().all()
+        for rule in rules:
+            db.expunge(rule)
+
+        self._fare_rules_cache = {rule.train_class: rule for rule in rules}
+        return self._fare_rules_cache
+
+    async def get_fare_rule(
+        self, db: AsyncSession, train_class: str
+    ) -> FareRules | None:
+        cache = await self._load_fare_rules(db)
+        return cache.get(train_class)
+
+    async def get_all_fare_rules(self, db: AsyncSession) -> list[FareRules]:
+        cache = await self._load_fare_rules(db)
+        return list(cache.values())
+
     async def get_all_stations(self, db: AsyncSession) -> list[dict]:
         if self._stations_cache is not None:
             return self._stations_cache
@@ -80,3 +106,15 @@ class CommonService:
 
 
 common_service = CommonService()
+
+
+async def preload_fare_rules() -> None:
+    """
+    Warm the in-memory fare-rules cache at app startup. Best-effort — never
+    blocks boot if the table is empty/unmigrated (lazy load is the fallback).
+    """
+    try:
+        async with async_session_local() as db:
+            await common_service.get_all_fare_rules(db)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("fare rules cache not loaded: %s", exc)

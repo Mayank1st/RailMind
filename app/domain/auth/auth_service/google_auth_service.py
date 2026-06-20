@@ -1,4 +1,5 @@
 # app/services/google_auth_service.py
+import asyncio
 import secrets
 from datetime import datetime, timezone
 
@@ -25,7 +26,7 @@ class GoogleAuthService:
     async def authenticate_with_google(
         self, raw_id_token: str
     ) -> tuple[Users, GoogleAuthResponseDTO]:
-        identity = verify_google_id_token(raw_id_token)
+        identity = await asyncio.to_thread(verify_google_id_token, raw_id_token)
         now = datetime.now(timezone.utc)
 
         # ── Branch 1: returning Google user ──

@@ -3,13 +3,12 @@ from datetime import date
 
 from fastapi import status
 from redis.asyncio import Redis
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.auth.constants.auth_user import CACHE_TTL_FARE
 from app.core.exceptions import RailMindException
 from app.core.fare_calculator import FareBreakdown, FareCalculator
-from app.db.models.booking import FareRules
+from app.domain.common.common_service.common_service import common_service
 from app.domain.fare.dto.fare_dto import (
     FareBreakdownDTO,
     FareEnquiryRequestDTO,
@@ -64,11 +63,12 @@ class FareEnquiryService:
         # train_stations.distance_km is cumulative from origin
         distance_km = to_stop.distance_km - from_stop.distance_km
 
-        # ── 4. Fetch fare rules (one class if filtered, else all) ─────────────
-        stmt = select(FareRules)
+        # ── 4. Fetch fare rules (in-memory cache se — one class ya all) ───────
         if payload.train_class is not None:
-            stmt = stmt.where(FareRules.train_class == payload.train_class.value)
-        fare_rules = (await db.execute(stmt)).scalars().all()
+            rule = await common_service.get_fare_rule(db, payload.train_class.value)
+            fare_rules = [rule] if rule else []
+        else:
+            fare_rules = await common_service.get_all_fare_rules(db)
 
         if not fare_rules:
             raise RailMindException(

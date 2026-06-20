@@ -45,6 +45,7 @@ from redis.asyncio import Redis
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    refresh_token_lifetime_seconds,
     generate_csrf_token,
     hash_token,
     verify_encoded_data,
@@ -286,7 +287,9 @@ class AuthService:
             )
 
         # ── 5. Issue session (tokens + Redis + cookies) ──
-        return await self.issue_session(user, response, redis)
+        return await self.issue_session(
+            user, response, redis, remember_me=payload.remember_me
+        )
 
     async def send_otp(
         self,
@@ -424,6 +427,8 @@ class AuthService:
             )
 
         user_id = payload.get("sub")
+        # carried in the refresh JWT so rotation preserves the user's choice
+        remember_me = bool(payload.get("remember_me", False))
 
         # ── 2. Check refresh token exists in Redis ────────────────────────────────
         stored_hash = await redis.get(f"refresh_token:{user_id}")
@@ -475,13 +480,15 @@ class AuthService:
             username=user.username,
             role=user.role,
         )
-        new_refresh_token, _ = create_refresh_token(user_id=str(user.id))
+        new_refresh_token, _ = create_refresh_token(
+            user_id=str(user.id), remember_me=remember_me
+        )
         new_csrf_token = generate_csrf_token()
 
         # ── 6. Overwrite Redis with new refresh token hash ────────────────────────
         await redis.setex(
             f"refresh_token:{user.id}",
-            settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+            refresh_token_lifetime_seconds(remember_me),
             hash_token(new_refresh_token),
         )
 
@@ -491,6 +498,7 @@ class AuthService:
             access_token=new_access_token,
             refresh_token=new_refresh_token,
             csrf_token=new_csrf_token,
+            remember_me=remember_me,
         )
 
         logger.info("Token refreshed successfully for user_id=%s", user_id)
@@ -835,7 +843,14 @@ class AuthService:
         access_token: str,
         refresh_token: str,
         csrf_token: str,
+        remember_me: bool = False,
     ) -> None:
+        access_max_age = (
+            settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60 if remember_me else None
+        )
+        refresh_max_age = (
+            refresh_token_lifetime_seconds(remember_me=True) if remember_me else None
+        )
 
         response.set_cookie(
             key=ACCESS_TOKEN_COOKIE_NAME,
@@ -843,7 +858,7 @@ class AuthService:
             httponly=True,
             secure=settings.cookie_secure,
             samesite=settings.cookie_samesite,
-            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            max_age=access_max_age,
             path="/",
         )
         response.set_cookie(
@@ -852,7 +867,7 @@ class AuthService:
             httponly=True,
             secure=settings.cookie_secure,
             samesite=settings.cookie_samesite,
-            max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+            max_age=refresh_max_age,
             path=REFRESH_TOKEN_COOKIE_PATH,
         )
         response.set_cookie(
@@ -861,7 +876,7 @@ class AuthService:
             httponly=False,
             secure=settings.cookie_secure,
             samesite=settings.cookie_samesite,
-            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            max_age=access_max_age,
             path="/",
         )
 
@@ -870,6 +885,7 @@ class AuthService:
         user: Users,
         response: Response,
         redis: Redis,
+        remember_me: bool = False,
     ) -> dict:
         """Tokens banao, Redis mein refresh hash daalo, cookies set karo.
         Har auth method (password / OTP / Google) ka common exit point."""
@@ -888,12 +904,14 @@ class AuthService:
             username=user.username,
             role=user.role,
         )
-        refresh_token, _ = create_refresh_token(user_id=str(user.id))
+        refresh_token, _ = create_refresh_token(
+            user_id=str(user.id), remember_me=remember_me
+        )
         csrf_token = generate_csrf_token()
 
         await redis.setex(
             f"refresh_token:{user.id}",
-            settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+            refresh_token_lifetime_seconds(remember_me),
             hash_token(refresh_token),
         )
 
@@ -902,6 +920,7 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_token,
             csrf_token=csrf_token,
+            remember_me=remember_me,
         )
 
         return {
