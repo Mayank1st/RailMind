@@ -1,7 +1,7 @@
 from app.db.base import BaseModel, DB_SCHEMA
 from sqlalchemy.orm import mapped_column, Mapped
 from sqlalchemy import String, Text, Integer
-from app.core.constants.faq import FaqCategory
+from app.domain.faq.constants.faq import FaqCategory
 
 
 class Faqs(BaseModel):

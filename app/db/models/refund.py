@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants.payment import RefundReason, RefundStatus
+from app.domain.payment.constants.payment import RefundReason, RefundStatus
 from app.db.base import BaseModel, DB_SCHEMA
 
 

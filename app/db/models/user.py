@@ -5,7 +5,12 @@ from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Stri
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants.auth_user import Gender, KycStatus, MaritalStatus, UserRole
+from app.domain.auth.constants.auth_user import (
+    Gender,
+    KycStatus,
+    MaritalStatus,
+    UserRole,
+)
 from app.db.base import BaseModel, DB_SCHEMA
 
 if TYPE_CHECKING:
@@ -86,6 +91,9 @@ class Users(BaseModel):
         lazy="noload",
     )
 
+    def __repr__(self) -> str:
+        return f"<Users id={self.id} email={self.email}>"
+
 
 class UserProfiles(BaseModel):
     __tablename__ = "user_profiles"
@@ -112,6 +120,9 @@ class UserProfiles(BaseModel):
 
     user = relationship("Users", back_populates="user_profile")
 
+    def __repr__(self) -> str:
+        return f"<UserProfiles id={self.id} user_id={self.user_id}>"
+
 
 class UserContacts(BaseModel):
     __tablename__ = "user_contacts"
@@ -132,6 +143,9 @@ class UserContacts(BaseModel):
 
     user = relationship("Users", back_populates="user_contact")
 
+    def __repr__(self) -> str:
+        return f"<UserContacts id={self.id} user_id={self.user_id}>"
+
 
 class UserKYC(BaseModel):
     __tablename__ = "user_kyc"
@@ -151,3 +165,6 @@ class UserKYC(BaseModel):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     user = relationship("Users", back_populates="user_kyc")
+
+    def __repr__(self) -> str:
+        return f"<UserKYC id={self.id} user_id={self.user_id} status={self.kyc_status}>"

@@ -25,9 +25,11 @@ async def _async_retry_booking(retry_request_id: str) -> None:
     from app.db.session import async_session_local
     from app.db.models.booking_retry_requests import BookingRetryRequest
     from app.db.models.train import Trains, Stations
-    from app.services.booking_retry_service import BookingRetryService
-    from app.services.booking_service import BookingService
-    from app.core.constants.booking_retry_request import RetryFailureReason
+    from app.domain.booking.booking_service.booking_retry_service import (
+        BookingRetryService,
+    )
+    from app.domain.booking.booking_service.booking_service import BookingService
+    from app.domain.booking.constants.booking_retry_request import RetryFailureReason
 
     retry_service = BookingRetryService()
     booking_service = BookingService()
@@ -85,7 +87,7 @@ async def _async_retry_booking(retry_request_id: str) -> None:
                     raise Exception("Train or station data missing")
 
                 # ── CreateBookingDTO reconstruct karo ─────────────────────────
-                from app.schemas.Request.bookingRequestDTO import (
+                from app.domain.booking.dto.booking_request_dto import (
                     CreateBookingDTO,
                     PassengerBookingDTO,
                 )

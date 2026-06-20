@@ -9,3 +9,6 @@ class SecurityQuestion(BaseModel):
     question: Mapped[str] = mapped_column(
         String(100), unique=True, nullable=False, index=True
     )
+
+    def __repr__(self) -> str:
+        return f"<SecurityQuestion id={self.id} question={self.question!r}>"

@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.constants.payment import (
+from app.domain.payment.constants.payment import (
     PaymentGateway,
     PaymentMethod,
     PaymentStatus,

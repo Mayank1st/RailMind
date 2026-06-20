@@ -13,7 +13,7 @@ from sqlalchemy import (
     Enum as SAEnum,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from app.core.constants.booking_retry_request import (
+from app.domain.booking.constants.booking_retry_request import (
     BookingRetryRequestStatus,
     RetryFailureReason,
 )
@@ -90,3 +90,9 @@ class BookingRetryRequest(BaseModel):
         foreign_keys=[success_booking_id],
         lazy="noload",
     )
+
+    def __repr__(self) -> str:
+        return (
+            f"<BookingRetryRequest id={self.id} booking_id={self.booking_id} "
+            f"status={self.status}>"
+        )

@@ -1,5 +1,5 @@
 from fastapi import Depends, HTTPException
-from app.core.constants.auth_user import UserRole
+from app.domain.auth.constants.auth_user import UserRole
 from app.api.deps import get_current_user
 
 
