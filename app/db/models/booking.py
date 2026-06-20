@@ -142,7 +142,9 @@ class BookingPassengers(BaseModel):
     # Actual berth assigned (e.g. "LB", "UB"). NULL until assigned at chart time.
     allotted_berth: Mapped[str | None] = mapped_column(String(5), nullable=True)
     # PassengerStatus enum: "CNF" / "RAC" / "WL" / "CAN"
-    passenger_status: Mapped[str] = mapped_column(String(5), nullable=False, index=True)
+    passenger_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, index=True
+    )
     fare: Mapped[float] = mapped_column(Float, nullable=False)
 
     booking = relationship("Bookings", back_populates="booking_passengers")

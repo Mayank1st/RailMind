@@ -32,7 +32,7 @@ async def search_trains(
                 user_id=current_user["sub"],
                 from_code=payload.fromStationCode.upper(),
                 to_code=payload.toStationCode.upper(),
-                journey_date=None,
+                journey_date=payload.journey_date.isoformat(),
                 train_class=payload.train_class.value if payload.train_class else None,
                 quota=payload.quota.value if payload.quota else None,
             )

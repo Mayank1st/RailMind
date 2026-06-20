@@ -70,6 +70,7 @@ class PassengerStatus(str, Enum):
     RAC = "RAC"
     WAITLISTED = "WL"
     CANCELLED = "CAN"
+    AUTO_CANCELLED_CHART = "AUTO_CANCELLED_CHART"
 
 
 class BookingAvailabilityStatus(str, Enum):

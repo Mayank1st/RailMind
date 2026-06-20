@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import BaseModel, DB_SCHEMA
 from app.core.constants.train import TrainType
+from app.core.constants.chart_preparation import ChartStatus
 
 
 class Stations(BaseModel):
@@ -230,7 +231,21 @@ class SeatInventories(BaseModel):
     is_chart_prepared: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
-    chart_prepared_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    chart_prepared_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # 2-stage chart preparation (T-8h initial, T-4h final). `is_chart_prepared`
+    # is kept (set True once Stage 1 runs) so existing read-side code keeps working.
+    chart_status: Mapped[str] = mapped_column(
+        String(20), default=ChartStatus.NOT_PREPARED.value, nullable=False
+    )
+    chart_prepared_stage1_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    chart_prepared_stage2_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # ── Quota release audit ───────────────────────────────────────────────────
     quota_released_seats: Mapped[int] = mapped_column(
@@ -255,6 +270,8 @@ class SeatInventories(BaseModel):
         ),
         # compound index for availability search across trains
         Index("ix_seat_inv_date_class_quota", "journey_date", "train_class", "quota"),
+        # chart-prep discovery scan
+        Index("ix_seat_inventories_chart_lookup", "chart_status", "journey_date"),
         # safety net — service layer must still use SELECT FOR UPDATE
         CheckConstraint(
             "available_confirmed_seats >= 0", name="ck_seat_inv_cnf_gte_zero"

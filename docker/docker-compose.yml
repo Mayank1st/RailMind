@@ -121,21 +121,21 @@ services:
   # ─────────────────────────────────────────────────────────────────────────────
   # Celery Beat (for scheduled tasks - Phase 2+)
   # ─────────────────────────────────────────────────────────────────────────────
-  # celery_beat:
-  #   build:
-  #     context: ..
-  #     dockerfile: Dockerfile
-  #   container_name: railmind_celery_beat
-  #   env_file:
-  #     - ../.env
-  #   environment:
-  #     DB_HOST: postgres
-  #     REDIS_URL: redis://redis:6379/0
-  #   depends_on:
-  #     - redis
-  #   networks:
-  #     - railmind_network
-  #   command: celery -A app.tasks.celery_app beat --loglevel=info
+  celery_beat:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: railmind_celery_beat
+    env_file:
+      - ../.env
+    environment:
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+    networks:
+      - railmind_network
+    command: celery -A app.tasks.celery_app beat --loglevel=info
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Named Volumes for Data Persistence

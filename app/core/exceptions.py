@@ -143,3 +143,26 @@ class LiveTrainNotRunningError(RailMindException):
     error_code = "RM-LIVE-003"
     status_code = 422
     message = "Train does not run on this date"
+
+
+# ─────────────────────────── CHART PREPARATION ───────────────────────────
+# Background-only (Celery); never surfaced over HTTP, but kept in the RM code
+# scheme for consistent logging.
+
+
+class ChartAlreadyPreparedError(RailMindException):
+    error_code = "RM-CHART-001"
+    status_code = 409
+    message = "Chart already prepared for this stage"
+
+
+class ChartInventoryNotFoundError(RailMindException):
+    error_code = "RM-CHART-002"
+    status_code = 404
+    message = "No seat inventory found for chart preparation"
+
+
+class ChartCascadeError(RailMindException):
+    error_code = "RM-CHART-003"
+    status_code = 500
+    message = "Promotion cascade failed during chart preparation"
