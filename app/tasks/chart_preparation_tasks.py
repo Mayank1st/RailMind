@@ -24,7 +24,7 @@ def _run_in_worker_loop(coro: Awaitable) -> None:
 
 
 async def _discover() -> tuple[int, int]:
-    from app.core.constants.chart_preparation import (
+    from app.domain.booking.constants.chart_preparation import (
         CHART_STAGE_1_WINDOW_MAX_HOURS,
         CHART_STAGE_1_WINDOW_MIN_HOURS,
         CHART_STAGE_2_WINDOW_MAX_HOURS,
@@ -32,7 +32,9 @@ async def _discover() -> tuple[int, int]:
         ChartStatus,
     )
     from app.db.session import async_session_local
-    from app.services.chart_preparation_service import chart_preparation_service
+    from app.domain.booking.booking_service.chart_preparation_service import (
+        chart_preparation_service,
+    )
 
     async with async_session_local() as db:
         stage1 = await chart_preparation_service.find_eligible_train_dates(
@@ -78,7 +80,9 @@ async def _prepare(train_id: str, journey_date: str, stage: int) -> None:
     from uuid import UUID
 
     from app.db.session import async_session_local
-    from app.services.chart_preparation_service import chart_preparation_service
+    from app.domain.booking.booking_service.chart_preparation_service import (
+        chart_preparation_service,
+    )
 
     async with async_session_local() as db:
         await chart_preparation_service.prepare_chart(

@@ -35,12 +35,12 @@ _TELESCOPIC_SLABS: list[tuple[int, int | None, float]] = [
 # ─── Superfast train types ────────────────────────────────────────────────────
 # These train types attract a superfast surcharge on top of base fare
 _SUPERFAST_TRAIN_TYPES: set[str] = {
-    "rajdhani",
-    "shatabdi",
-    "jan_shatabdi",
-    "duronto",
-    "garib_rath",
-    "superfast",
+    "RAJDHANI",
+    "SHATABDI",
+    "JAN_SHATABDI",
+    "DURONTO",
+    "GARIB_RATH",
+    "SUPERFAST",
 }
 
 # ─── IRCTC Online Service Charge ─────────────────────────────────────────────
@@ -158,10 +158,10 @@ class FareCalculator:
     def __init__(self, fare_rule, train_type: str):
         """
         fare_rule — FareRules ORM object fetched from DB
-        train_type — Trains.train_type value (e.g. "superfast", "express")
+        train_type — Trains.train_type value (e.g. "SUPERFAST", "EXPRESS")
         """
         self._rule = fare_rule
-        self._train_type = train_type.lower() if train_type else "unknown"
+        self._train_type = train_type.upper() if train_type else "UNKNOWN"
 
     # ── Public API ────────────────────────────────────────────────────────────
 

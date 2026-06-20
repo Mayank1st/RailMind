@@ -35,7 +35,9 @@ async def _async_log_search(
 
     from app.config import settings
     from app.db.session import async_session_local
-    from app.services.search_history_service import search_history_service
+    from app.domain.search_history.search_history_service.search_history_service import (
+        search_history_service,
+    )
 
     jdate = date.fromisoformat(journey_date) if journey_date else None
 
@@ -82,7 +84,9 @@ def task_log_search_history(
 
 async def _async_cleanup_search_histories() -> None:
     from app.db.session import async_session_local
-    from app.services.search_history_service import search_history_service
+    from app.domain.search_history.search_history_service.search_history_service import (
+        search_history_service,
+    )
 
     async with async_session_local() as db:
         deleted = await search_history_service.cleanup(db)

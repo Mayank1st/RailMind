@@ -94,3 +94,9 @@ class WaitlistEntries(BaseModel):
         ),
         {"schema": DB_SCHEMA},
     )
+
+    def __repr__(self) -> str:
+        return (
+            f"<WaitlistEntries id={self.id} booking_id={self.booking_id} "
+            f"wl_type={self.wl_type} current_position={self.current_position}>"
+        )

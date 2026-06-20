@@ -24,7 +24,9 @@ from fastapi_pagination import add_pagination
 
 from app.dependencies import get_db
 from app.utils.helpers import get_utc_timezone
-from app.services.station_cluster_service import preload_station_clusters
+from app.domain.station.station_service.station_cluster_service import (
+    preload_station_clusters,
+)
 
 
 @asynccontextmanager

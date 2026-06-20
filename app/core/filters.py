@@ -25,7 +25,7 @@ class BaseFilter(Filter):
                    (prefix `-` = descending).
 
     Subclass example:
-        class TrainFilter(BaseFilter):
+        class TrainFilterDTO(BaseFilter):
             train_name__ilike: Optional[str] = None
             class Constants(BaseFilter.Constants):
                 model = Trains

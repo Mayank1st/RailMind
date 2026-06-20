@@ -14,14 +14,14 @@ if TYPE_CHECKING:
 
 
 class UserActionType(str, enum.Enum):
-    TRAIN_SEARCH = "train_search"
-    AUTOFILL_REQUESTED = "autofill_requested"
-    CLASS_SELECTED = "class_selected"
-    BERTH_SELECTED = "berth_selected"
-    PASSENGER_ADDED = "passenger_added"
-    BOOKING_INITIATED = "booking_initiated"
-    BOOKING_COMPLETED = "booking_completed"
-    FORM_ABANDONED = "form_abandoned"
+    TRAIN_SEARCH = "TRAIN_SEARCH"
+    AUTOFILL_REQUESTED = "AUTOFILL_REQUESTED"
+    CLASS_SELECTED = "CLASS_SELECTED"
+    BERTH_SELECTED = "BERTH_SELECTED"
+    PASSENGER_ADDED = "PASSENGER_ADDED"
+    BOOKING_INITIATED = "BOOKING_INITIATED"
+    BOOKING_COMPLETED = "BOOKING_COMPLETED"
+    FORM_ABANDONED = "FORM_ABANDONED"
 
 
 class UserBehaviorLogs(BaseModel):
@@ -74,3 +74,9 @@ class UserBehaviorLogs(BaseModel):
         back_populates="behavior_logs",
         lazy="noload",
     )
+
+    def __repr__(self) -> str:
+        return (
+            f"<UserBehaviorLogs id={self.id} user_id={self.user_id} "
+            f"action_type={self.action_type}>"
+        )

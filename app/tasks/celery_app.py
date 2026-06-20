@@ -2,7 +2,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 from app.config import settings
-from app.core.constants.chart_preparation import CHART_CHECK_INTERVAL_MINUTES
+from app.domain.booking.constants.chart_preparation import CHART_CHECK_INTERVAL_MINUTES
 
 
 def _redis_broker_url() -> str:
