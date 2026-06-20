@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Checking RailMind naming conventions...",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; [ -n \"$f\" ] || exit 0; case \"$f\" in *.py) python3 \"${CLAUDE_PROJECT_DIR:-.}/scripts/check_naming_conventions.py\" \"$f\" >&2 || exit 2 ;; esac; }"
+          }
+        ]
+      }
+    ]
+  }
+}
