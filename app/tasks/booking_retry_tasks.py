@@ -1,22 +1,10 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Awaitable
-
 from app.tasks.celery_app import celery_app
+from app.tasks.worker_loop import run_in_worker_loop as _run_in_worker_loop
 from celery.utils.log import get_task_logger
 
 logger = get_task_logger(__name__)
-_worker_loop: asyncio.AbstractEventLoop | None = None
-
-
-def _run_in_worker_loop(coro: Awaitable[None]) -> None:
-    """Reuse one event loop per worker process to avoid asyncpg loop mismatch."""
-    global _worker_loop
-    if _worker_loop is None or _worker_loop.is_closed():
-        _worker_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(_worker_loop)
-    _worker_loop.run_until_complete(coro)
 
 
 async def _async_retry_booking(retry_request_id: str) -> None:
@@ -25,9 +13,11 @@ async def _async_retry_booking(retry_request_id: str) -> None:
     from app.db.session import async_session_local
     from app.db.models.booking_retry_requests import BookingRetryRequest
     from app.db.models.train import Trains, Stations
-    from app.services.booking_retry_service import BookingRetryService
-    from app.services.booking_service import BookingService
-    from app.core.constants.booking_retry_request import RetryFailureReason
+    from app.domain.booking.booking_service.booking_retry_service import (
+        BookingRetryService,
+    )
+    from app.domain.booking.booking_service.booking_service import BookingService
+    from app.domain.booking.constants.booking_retry_request import RetryFailureReason
 
     retry_service = BookingRetryService()
     booking_service = BookingService()
@@ -85,7 +75,7 @@ async def _async_retry_booking(retry_request_id: str) -> None:
                     raise Exception("Train or station data missing")
 
                 # ── CreateBookingDTO reconstruct karo ─────────────────────────
-                from app.schemas.Request.bookingRequestDTO import (
+                from app.domain.booking.dto.booking_request_dto import (
                     CreateBookingDTO,
                     PassengerBookingDTO,
                 )

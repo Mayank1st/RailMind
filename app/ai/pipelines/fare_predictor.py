@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
 from app.core.response import ok
-from app.services.nlp_search_service import NlpSearchService
-from app.schemas.Request.nlpSearchDTO import GetNLPSearchDTO
+from app.domain.nlp_search.nlp_search_service.nlp_search_service import NlpSearchService
+from app.domain.nlp_search.dto.nlp_search_dto import GetNLPSearchDTO
 
 router = APIRouter(prefix="/fare")
 nlp_search_service = NlpSearchService()

@@ -1,30 +1,18 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Awaitable
-
 from celery.utils.log import get_task_logger
 
 from app.tasks.celery_app import celery_app
+from app.tasks.worker_loop import run_in_worker_loop as _run_in_worker_loop
 
 logger = get_task_logger(__name__)
-_worker_loop: asyncio.AbstractEventLoop | None = None
-
-
-def _run_in_worker_loop(coro: Awaitable) -> None:
-    """Reuse one event loop per worker process to avoid asyncpg loop mismatch."""
-    global _worker_loop
-    if _worker_loop is None or _worker_loop.is_closed():
-        _worker_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(_worker_loop)
-    _worker_loop.run_until_complete(coro)
 
 
 # ── Discovery — runs every CHART_CHECK_INTERVAL_MINUTES via Celery beat ───────
 
 
 async def _discover() -> tuple[int, int]:
-    from app.core.constants.chart_preparation import (
+    from app.domain.booking.constants.chart_preparation import (
         CHART_STAGE_1_WINDOW_MAX_HOURS,
         CHART_STAGE_1_WINDOW_MIN_HOURS,
         CHART_STAGE_2_WINDOW_MAX_HOURS,
@@ -32,7 +20,9 @@ async def _discover() -> tuple[int, int]:
         ChartStatus,
     )
     from app.db.session import async_session_local
-    from app.services.chart_preparation_service import chart_preparation_service
+    from app.domain.booking.booking_service.chart_preparation_service import (
+        chart_preparation_service,
+    )
 
     async with async_session_local() as db:
         stage1 = await chart_preparation_service.find_eligible_train_dates(
@@ -78,7 +68,9 @@ async def _prepare(train_id: str, journey_date: str, stage: int) -> None:
     from uuid import UUID
 
     from app.db.session import async_session_local
-    from app.services.chart_preparation_service import chart_preparation_service
+    from app.domain.booking.booking_service.chart_preparation_service import (
+        chart_preparation_service,
+    )
 
     async with async_session_local() as db:
         await chart_preparation_service.prepare_chart(

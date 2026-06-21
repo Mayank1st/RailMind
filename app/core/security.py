@@ -154,10 +154,16 @@ def create_access_token(
 # ─── Refresh Token ────────────────────────────────────────────────────────────
 
 
-def create_refresh_token(user_id: str) -> tuple[str, str]:
+def refresh_token_lifetime_seconds(remember_me: bool) -> int:
+    if remember_me:
+        return settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    return settings.SESSION_REFRESH_TOKEN_EXPIRE_HOURS * 60 * 60
+
+
+def create_refresh_token(user_id: str, remember_me: bool = False) -> tuple[str, str]:
     jti = _generate_jti()
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = now + timedelta(seconds=refresh_token_lifetime_seconds(remember_me))
 
     payload = {
         "sub": str(user_id),
@@ -165,6 +171,7 @@ def create_refresh_token(user_id: str) -> tuple[str, str]:
         "iat": now,
         "exp": expire,
         "type": "refresh",  # must check this to prevent access token used as refresh
+        "remember_me": remember_me,  # carried so token rotation keeps the choice
     }
 
     token = jwt.encode(

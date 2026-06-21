@@ -200,3 +200,74 @@ class BookingStatus(str, Enum):
 | Router tag | Capitalized | `tags=["Auth"]` |
 | Router prefix / path | lowercase | `prefix="/auth"`, `/login` |
 | Enum value | UPPERCASE string | `"CONFIRMED"` |
+| Module folder | snake_case | `app/domain/booking/` |
+| Router subfolder | `<module>_router/` | `train_router/` |
+| Service subfolder | `<module>_service/` | `booking_service/` |
+| Route file | router tag, snake_case | `health_check.py` |
+| Model location | central `app/db/models/` | `app/db/models/booking.py` |
+
+## 9. Project & module folder structure
+
+The backend is organised **by business module** under `app/domain/`. Each module is a
+package with router and service **subfolders**, plus `dto/` and `constants/`:
+
+```
+app/domain/<module>/
+├── <module>_router/
+│   ├── __init__.py
+│   └── <tag>.py            # router file — named after the router's TAG (see §3), not router.py
+├── <module>_service/
+│   ├── __init__.py
+│   └── <name>_service.py   # one or more service files
+├── dto/
+│   ├── __init__.py
+│   └── <name>_dto.py
+└── constants/
+    ├── __init__.py
+    └── <name>.py
+```
+
+Example:
+
+```
+app/domain/train/
+├── train_router/train.py                 # tags=["Train"]  -> train.py
+├── train_service/train_service.py
+├── dto/        (train_request_dto, train_response_dto, train_filter_dto)
+└── constants/train.py
+
+app/domain/booking/
+├── booking_router/booking.py             # tags=["Booking"]
+├── booking_service/  (booking_service, booking_retry_service, chart_preparation_service, ticket_pdf)
+├── dto/  ·  constants/
+```
+
+- **The route file is named after the router's tag**, lowercased and `snake_case` — not
+  `router.py`. `tags=["Health Check"]` -> `health_check.py`; `tags=["PNR"]` -> `pnr.py`;
+  `tags=["Payments"]` -> `payments.py`. The aggregator imports it as
+  `from app.domain.<module>.<module>_router.<tag> import router`.
+- A module may hold **multiple** service files in `<module>_service/`.
+
+### Models stay central
+
+**Models do NOT move into domains.** All SQLAlchemy models live in `app/db/models/<table>.py`
+and are re-exported from `app/db/models/__init__.py` (the aggregator that registers every
+model on `Base.metadata` for Alembic). Import as `from app.db.models.<table> import <Model>`.
+
+### Shared infrastructure
+
+Cross-cutting code stays shared (not per-module): `app/config.py`, `app/db/base.py`,
+`app/db/session.py`, `app/api/deps.py`, `app/core/*` (response, pagination, security,
+exceptions, permissions, filters), and the shared base DTO at `app/schemas/base.py`.
+
+## 10. DTO class suffix & the filter escape-hatch
+
+- **Every DTO class ends with `DTO`.** Top-level request bodies -> `<Name>RequestDTO`,
+  response bodies -> `<Name>ResponseDTO`; nested/helper DTOs still end in `DTO`
+  (e.g. `PassengerSuggestionDTO`, `CoachResponseDTO`). Filter DTOs -> `<Name>FilterDTO`.
+- All DTOs inherit the shared `BaseDTO` (`app/schemas/base.py`), which sets
+  `model_config = ConfigDict(extra="forbid", from_attributes=True)` — individual DTOs do
+  not redeclare `model_config`.
+- The `fastapi-filter` inner `class Constants` inside a filter DTO can't end in `DTO`;
+  tag its line `# naming: ignore` so the naming checker
+  (`scripts/check_naming_conventions.py`) skips it.

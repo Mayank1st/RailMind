@@ -39,3 +39,9 @@ class UserOAuthAccounts(BaseModel):
     )
 
     user = relationship("Users", back_populates="user_oauth_accounts")
+
+    def __repr__(self) -> str:
+        return (
+            f"<UserOAuthAccounts id={self.id} user_id={self.user_id} "
+            f"provider={self.provider}>"
+        )

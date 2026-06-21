@@ -1,24 +1,13 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Awaitable
 from typing import Optional
 
 from celery.utils.log import get_task_logger
 
 from app.tasks.celery_app import celery_app
+from app.tasks.worker_loop import run_in_worker_loop as _run_in_worker_loop
 
 logger = get_task_logger(__name__)
-_worker_loop: asyncio.AbstractEventLoop | None = None
-
-
-def _run_in_worker_loop(coro: Awaitable[None]) -> None:
-    """Reuse one event loop per worker process to avoid asyncpg loop mismatch."""
-    global _worker_loop
-    if _worker_loop is None or _worker_loop.is_closed():
-        _worker_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(_worker_loop)
-    _worker_loop.run_until_complete(coro)
 
 
 async def _async_log_search(
@@ -35,7 +24,9 @@ async def _async_log_search(
 
     from app.config import settings
     from app.db.session import async_session_local
-    from app.services.search_history_service import search_history_service
+    from app.domain.search_history.search_history_service.search_history_service import (
+        search_history_service,
+    )
 
     jdate = date.fromisoformat(journey_date) if journey_date else None
 
@@ -82,7 +73,9 @@ def task_log_search_history(
 
 async def _async_cleanup_search_histories() -> None:
     from app.db.session import async_session_local
-    from app.services.search_history_service import search_history_service
+    from app.domain.search_history.search_history_service.search_history_service import (
+        search_history_service,
+    )
 
     async with async_session_local() as db:
         deleted = await search_history_service.cleanup(db)

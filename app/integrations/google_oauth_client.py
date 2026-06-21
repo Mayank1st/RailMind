@@ -1,6 +1,8 @@
 # app/integrations/google_oauth_client.py
 from dataclasses import dataclass
 
+import requests
+from cachecontrol import CacheControl
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 
@@ -9,6 +11,10 @@ from app.core.exceptions import (
     GoogleEmailUnverifiedError,
     GoogleTokenInvalidError,
 )
+
+# Module-level cached request, reused across every login. Two wins:
+_cached_session = CacheControl(requests.Session())
+_google_request = google_requests.Request(session=_cached_session)
 
 
 @dataclass(frozen=True)
@@ -24,7 +30,7 @@ def verify_google_id_token(raw_id_token: str) -> GoogleIdentity:
     try:
         payload = google_id_token.verify_oauth2_token(
             raw_id_token,
-            google_requests.Request(),
+            _google_request,
             audience=settings.GOOGLE_CLIENT_ID,
             clock_skew_in_seconds=10,
         )

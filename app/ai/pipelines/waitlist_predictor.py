@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
 from app.core.response import ok
-from app.services.waitlist_predictor_service import WaitlistPredictorService
+from app.domain.waitlist.waitlist_service.waitlist_predictor_service import (
+    WaitlistPredictorService,
+)
 
 router = APIRouter(prefix="/waitlist")
 waitlist_predictor_service = WaitlistPredictorService()

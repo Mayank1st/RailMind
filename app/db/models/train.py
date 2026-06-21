@@ -17,8 +17,8 @@ from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import BaseModel, DB_SCHEMA
-from app.core.constants.train import TrainType
-from app.core.constants.chart_preparation import ChartStatus
+from app.domain.train.constants.train import TrainType
+from app.domain.booking.constants.chart_preparation import ChartStatus
 
 
 class Stations(BaseModel):
