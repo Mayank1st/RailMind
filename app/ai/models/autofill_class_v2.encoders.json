@@ -1,0 +1,32 @@
+{
+  "quota_codes": {
+    "GN": 1,
+    "LD": 2,
+    "TQ": 3
+  },
+  "class_order": [
+    "3A",
+    "SL",
+    "2S",
+    "2A",
+    "CC",
+    "1A"
+  ],
+  "feature_order": [
+    "distance_km",
+    "distance_bucket_code",
+    "is_night_train",
+    "passenger_count",
+    "has_senior",
+    "has_child",
+    "is_weekend",
+    "month",
+    "is_festival_season",
+    "quota_code",
+    "user_hist_top_class_code",
+    "user_hist_class_for_bucket_code",
+    "user_hist_recent_class_code",
+    "user_hist_class_for_distance_code"
+  ],
+  "model_version": "autofill-class-v2"
+}

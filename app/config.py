@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     RAPIDAPI_LIVE_STATUS_BASE_URL: str = "https://train-running-api.p.rapidapi.com"
     RAPIDAPI_LIVE_STATUS_TIMEOUT_SECONDS: int = 15
 
+    # AUTOFILL (Smart Form Autofill — Level 1 rules)
+    AI_CONFIDENCE_THRESHOLD: float = (
+        0.75  # >= this -> auto-fill; below -> suggestion only
+    )
+
     # GEMINI API
     GEMINI_API_KEY: str
     GEMINI_API_KEY_NAME: str

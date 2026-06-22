@@ -1,7 +1,9 @@
 # ════════════════════════════════════════════════════════════════════════════════
 # RailMind Backend - Production Dockerfile
 # Multi-stage build for optimized image size
-# Python 3.11+ | FastAPI | PostgreSQL | Redis
+# Python 3.14 (matches local/CI venv — ML wheels: numpy/scipy/scikit-learn/xgboost
+# are compiled per-Python-version, so image MUST match the version models were
+# trained/tested on) | FastAPI | PostgreSQL | Redis
 # ════════════════════════════════════════════════════════════════════════════════
 
 # ─────────────────────────────────────────────────────────────────────────────────
@@ -43,8 +45,11 @@ RUN useradd -m -u 1000 railmind && \
     chown -R railmind:railmind /app
 
 # Install runtime dependencies only (lighter than builder stage)
+# libgomp1 = OpenMP runtime required by xgboost (Level-2 autofill model); without
+# it `import xgboost` fails at runtime. macOS dev equivalent: `brew install libomp`.
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    libgomp1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

@@ -37,6 +37,51 @@ class AutofillResponseDTO(BaseDTO):
     based_on_bookings: int = 0
 
 
+# ── Smart Autofill (Level 1 rules — per-field value + confidence) ─────────────
+
+
+# -- FieldSuggestion -----------------------------------------
+class FieldSuggestionDTO(BaseDTO):
+    value: Optional[str] = None
+    confidence: float = 0.0  # 0.0-1.0
+
+
+# -- PassengerRefSuggestion ----------------------------------
+class PassengerRefSuggestionDTO(BaseDTO):
+    passenger_id: str
+    full_name: str
+    age: int
+    gender: str
+    berth: FieldSuggestionDTO  # suggested berth (history mode) value + confidence
+    confidence: float  # 0.0-1.0 — how often this passenger is booked
+
+
+# -- FavouriteTrain ------------------------------------------
+class FavouriteTrainDTO(BaseDTO):
+    train_number: str
+    train_name: str
+    previous_booking_count: int  # times the user booked this train on this route
+
+
+# -- SmartAutofillResponse -----------------------------------
+class SmartAutofillResponseDTO(BaseDTO):
+    train_class: FieldSuggestionDTO
+    quota: FieldSuggestionDTO
+    passengers: list[PassengerRefSuggestionDTO] = Field(default_factory=list)
+
+    # Most-booked train on this route (user+route only; independent of train_number).
+    # null when the user has no prior bookings on the route.
+    favourite_train: Optional[FavouriteTrainDTO] = None
+
+    source: Literal["HISTORY", "DEFAULTS", "MODEL"] = "DEFAULTS"
+    model_version: Optional[str] = None  # set only when source == MODEL
+    distance_bucket: Optional[str] = None
+    journey_distance_km: Optional[int] = None
+    booking_count: int = 0  # total bookings the user has
+    based_on_bookings: int = 0  # bookings the class suggestion was derived from
+    auto_fill: bool = False  # train_class confidence >= AI_CONFIDENCE_THRESHOLD
+
+
 # ── Behavior Logging ──────────────────────────────────────────────────────────
 
 
