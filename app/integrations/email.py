@@ -6,6 +6,8 @@ from app.config import settings
 from app.utils.logger import logger
 
 TEMPLATES_DIR = Path(__file__).parent / "email_templates"
+LOGO_PATH = Path(__file__).parent.parent / "assets" / "images" / "logo.png"
+LOGO_CID = "railmind_logo"  # templates reference it as <img src="cid:railmind_logo">
 
 
 def load_template(template_name: str, **kwargs) -> str:
@@ -36,12 +38,29 @@ async def send_email(
         settings.EMAIL_SMTP_HOST,
         settings.MAIL_PORT,
     )
+    attachments = list(attachments or [])
+    # Embed the RailMind logo inline (cid:railmind_logo) so it renders in email
+    # clients without fetching an external URL (the old Supabase <img> 404'd /
+    # got blocked). Only attached when the template actually references the cid.
+    if f"cid:{LOGO_CID}" in body and LOGO_PATH.is_file():
+        attachments.append(
+            {
+                "file": str(LOGO_PATH),
+                "mime_type": "image",
+                "mime_subtype": "png",
+                "headers": {
+                    "Content-ID": f"<{LOGO_CID}>",
+                    "Content-Disposition": f'inline; filename="{LOGO_PATH.name}"',
+                },
+            }
+        )
+
     message = MessageSchema(
         subject=subject,
         recipients=[to],
         body=body,
         subtype="html",
-        attachments=attachments or [],
+        attachments=attachments,
     )
     fm = FastMail(conf)
     try:
