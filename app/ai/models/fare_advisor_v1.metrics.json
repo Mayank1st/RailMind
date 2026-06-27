@@ -1,0 +1,19 @@
+{
+  "model_version": "fare-advisor-v1",
+  "rows_train": 16082,
+  "rows_test": 4065,
+  "positive_rate_train": 0.1364,
+  "scale_pos_weight": 6.333,
+  "threshold": 0.3,
+  "recall": 0.9836,
+  "precision": 0.651,
+  "false_book_now_rate": 0.349,
+  "accuracy": 0.9267,
+  "confusion": {
+    "tn": 3228,
+    "fp": 289,
+    "fn": 9,
+    "tp": 539
+  },
+  "gate": "PASS"
+}

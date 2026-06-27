@@ -1,0 +1,65 @@
+{
+  "model_version": "fare-advisor-v1",
+  "feature_order": [
+    "fill_rate",
+    "booking_velocity",
+    "waitlist_pressure",
+    "days_to_journey",
+    "distance_bucket_code",
+    "train_type_code",
+    "quota_code",
+    "train_class_code",
+    "month",
+    "is_weekend",
+    "is_festival_season"
+  ],
+  "snapshot_leads": [
+    1,
+    2,
+    3,
+    5,
+    7,
+    10,
+    15,
+    20,
+    30
+  ],
+  "horizon_w": 5,
+  "book_now_p": 0.3,
+  "train_type_order": [
+    "EXPRESS",
+    "SUPERFAST",
+    "RAJDHANI",
+    "SHATABDI",
+    "JAN_SHATABDI",
+    "DURONTO",
+    "GARIB_RATH",
+    "PASSENGER",
+    "SUBURBAN",
+    "DEMU",
+    "SPECIAL",
+    "HERITAGE",
+    "UNKNOWN"
+  ],
+  "quota_order": [
+    "GN",
+    "TQ",
+    "PT",
+    "LD",
+    "SS",
+    "HP",
+    "DF",
+    "FT",
+    "LB"
+  ],
+  "class_order": [
+    "SL",
+    "3A",
+    "2A",
+    "1A",
+    "CC",
+    "2S",
+    "FC",
+    "3E"
+  ]
+}
