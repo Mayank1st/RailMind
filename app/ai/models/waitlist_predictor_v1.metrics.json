@@ -1,0 +1,20 @@
+{
+  "model_version": "waitlist-predictor-v1",
+  "rows_train": 30395,
+  "rows_test": 7484,
+  "positive_rate": 0.4848,
+  "scale_pos_weight": 0.654,
+  "precision": 0.9456,
+  "recall": 0.935,
+  "relax_precision": 0.9817,
+  "relax_n": 2738,
+  "false_confirm_rate": 0.0544,
+  "accuracy": 0.949,
+  "confusion": {
+    "tn": 4094,
+    "fp": 173,
+    "fn": 209,
+    "tp": 3008
+  },
+  "gate": "PASS"
+}
