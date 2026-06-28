@@ -8,6 +8,8 @@ ERROR_CODE_ADVISOR = "RM-FARE-ADV-001"
 # ── Fill-rate thresholds (fraction of confirmed seats already taken) ───────────
 # fill_rate = (total_confirmed - available_confirmed) / total_confirmed
 URGENT_FILL_RATE = 0.90  # >= this -> seats almost gone
+# fill_rate == 1.0 iff available_confirmed_seats == 0 (sold out — only RAC/WL left).
+SOLD_OUT_FILL_RATE = 1.0  # >= this -> confirmed seats gone, only RAC/WL booking
 BOOK_NOW_FILL_RATE = 0.70  # >= this -> filling fast, don't wait
 CAN_WAIT_FILL_RATE = 0.40  # < this (with time in hand) -> safe to wait
 

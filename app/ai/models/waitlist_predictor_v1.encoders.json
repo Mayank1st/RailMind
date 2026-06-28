@@ -1,0 +1,61 @@
+{
+  "model_version": "waitlist-predictor-v1",
+  "feature_order": [
+    "wl_position",
+    "wl_type_code",
+    "days_to_journey",
+    "train_class_code",
+    "quota_code",
+    "train_type_code",
+    "distance_bucket_code",
+    "route_cancel_rate",
+    "month",
+    "is_weekend",
+    "is_festival_season"
+  ],
+  "confirm_eval_p": 0.5,
+  "relax_p": 0.8,
+  "wl_type_order": [
+    "GNWL",
+    "RLWL",
+    "PQWL",
+    "TQWL",
+    "RQWL"
+  ],
+  "train_type_order": [
+    "EXPRESS",
+    "SUPERFAST",
+    "RAJDHANI",
+    "SHATABDI",
+    "JAN_SHATABDI",
+    "DURONTO",
+    "GARIB_RATH",
+    "PASSENGER",
+    "SUBURBAN",
+    "DEMU",
+    "SPECIAL",
+    "HERITAGE",
+    "UNKNOWN"
+  ],
+  "quota_order": [
+    "GN",
+    "TQ",
+    "PT",
+    "LD",
+    "SS",
+    "HP",
+    "DF",
+    "FT",
+    "LB"
+  ],
+  "class_order": [
+    "SL",
+    "3A",
+    "2A",
+    "1A",
+    "CC",
+    "2S",
+    "FC",
+    "3E"
+  ]
+}

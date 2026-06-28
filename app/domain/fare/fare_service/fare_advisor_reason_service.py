@@ -17,13 +17,6 @@ _SYSTEM_INSTRUCTION = (
     "decision; no markdown; max 28 words."
 )
 
-# Keep Gemini on-message — a directive per decision so it can't drift.
-_DIRECTIVE = {
-    "URGENT": "Seats are critically low / already waitlisting — book immediately.",
-    "BOOK_NOW": "Demand is rising — book now rather than wait.",
-    "CAN_WAIT": "No rush right now — it is safe to wait and check later.",
-}
-
 
 class FareAdvisorReasonService:
     """Level-3 — turns the deterministic decision + signals into a natural-language
@@ -38,14 +31,17 @@ class FareAdvisorReasonService:
 
         fill = signals.get("fill_rate")
         fill_pct = f"{round(fill * 100)}%" if fill is not None else "unknown"
+        # Rephrase the backend's already-correct sentence (so Gemini can't drift back
+        # into a wrong framing — e.g. "book to avoid WL" on a sold-out class).
         prompt = (
             f"Decision: {decision}. "
-            f"Directive: {_DIRECTIVE.get(decision, '')} "
+            f"Backend's exact advice — rephrase this, keep its meaning, do not "
+            f'contradict it or invent facts: "{fallback}". '
             f"Signals — seats {fill_pct} full, "
             f"{signals.get('days_to_journey')} days to journey, "
             f"booking demand {signals.get('booking_velocity')}, "
             f"waitlist pressure {signals.get('waitlist_pressure')}. "
-            f"Write the one-line advice."
+            f"Rephrase into one friendly line."
         )
 
         try:

@@ -17,6 +17,7 @@ from app.domain.fare.constants.fare_advisor import (
     CONFIDENCE_MEDIUM,
     FAR_JOURNEY_DAYS,
     NEAR_JOURNEY_DAYS,
+    SOLD_OUT_FILL_RATE,
     URGENT_FILL_RATE,
     VELOCITY_HIGH_PER_DAY,
     VELOCITY_MODERATE_PER_DAY,
@@ -390,8 +391,27 @@ class FareAdvisorRulesService:
     ) -> str:
         """Deterministic templated reason. Level-3 (Gemini) will later turn the
         decision + signals into a richer natural-language nudge."""
-        fill_pct = f"{round(fill_rate * 100)}%" if fill_rate is not None else "unknown"
+        # No live availability (no inventory row) — don't reference a fill %.
+        if fill_rate is None:
+            if decision is AdvisorDecision.CAN_WAIT:
+                return (
+                    f"Live seat availability isn't in yet, and the journey is "
+                    f"{days_to_journey} days away — you can wait and check again closer "
+                    f"to the date."
+                )
+            return (
+                f"Live seat availability isn't in yet, and the journey is only "
+                f"{days_to_journey} days away — booking early is the safer choice."
+            )
+
+        fill_pct = f"{round(fill_rate * 100)}%"
         if decision is AdvisorDecision.URGENT:
+            if fill_rate >= SOLD_OUT_FILL_RATE:
+                return (
+                    "Confirmed seats for this class are sold out — only RAC / waitlist "
+                    "booking is left. Try another class or train, or book the waitlist "
+                    "if you're willing to risk it."
+                )
             return (
                 f"Seats are almost gone ({fill_pct} full) — book immediately or you may "
                 f"fall to the waitlist / Tatkal."
