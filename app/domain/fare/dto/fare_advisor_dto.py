@@ -20,6 +20,9 @@ class AdvisorSignalsDTO(BaseDTO):
     days_to_journey: int
     booking_velocity: Literal["HIGH", "MODERATE", "LOW"]
     waitlist_pressure: Optional[float] = None  # 0.0-1.0; null when no live inventory
+    nearby_holiday: Optional[str] = (
+        None  # display-only; festival name near journey, else null
+    )
 
 
 # -- FareAdvisorResponse -------------------------------------

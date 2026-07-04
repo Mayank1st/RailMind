@@ -4,6 +4,9 @@ from io import BytesIO
 
 from starlette.datastructures import Headers, UploadFile
 
+from app.db.session import async_session_local
+from app.domain.booking.booking_service.booking_service import BookingService
+from app.domain.booking.booking_service.ticket_pdf import build_ticket_pdf
 from app.integrations.email import load_template, send_email
 from app.tasks.celery_app import celery_app
 from app.tasks.worker_loop import run_in_worker_loop as _run_in_worker_loop
@@ -89,10 +92,6 @@ def _build_passenger_rows(passengers: list[dict]) -> str:
 
 
 async def _async_send_booking_confirmation(booking_id: str) -> None:
-    from app.db.session import async_session_local
-    from app.domain.booking.booking_service.booking_service import BookingService
-    from app.domain.booking.booking_service.ticket_pdf import build_ticket_pdf
-
     booking_service = BookingService()
 
     async with async_session_local() as db:

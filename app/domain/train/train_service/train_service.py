@@ -1,4 +1,3 @@
-import logger
 from fastapi import status
 from typing import Optional
 from sqlalchemy.orm import aliased, selectinload

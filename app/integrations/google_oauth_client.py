@@ -17,7 +17,7 @@ _cached_session = CacheControl(requests.Session())
 _google_request = google_requests.Request(session=_cached_session)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True)  # frozen true means keys ki value read-only hai
 class GoogleIdentity:
     google_sub: str
     email: str

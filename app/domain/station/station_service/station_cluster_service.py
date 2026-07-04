@@ -6,6 +6,7 @@ from sqlalchemy.orm import aliased
 
 from app.db.models.station_clusters import StationClusterMembers, StationClusters
 from app.db.models.train import Stations
+from app.db.session import async_session_local
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +131,6 @@ async def preload_station_clusters() -> None:
     Warm the in-memory cluster map at app startup. Best-effort — never blocks
     boot if the table is empty/unmigrated (lazy `ensure_loaded` is the fallback).
     """
-    from app.db.session import async_session_local
-
     try:
         async with async_session_local() as db:
             await station_cluster_service.load(db, force=True)

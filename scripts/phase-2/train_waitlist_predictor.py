@@ -1,30 +1,3 @@
-# Waitlist Confirmation Predictor — L2 offline trainer (Phase 2, Feature 03).
-#
-# Trains P(WL -> CNF/RAC) on the SETTLED waitlist entries produced by
-# seed_waitlist_bookings.py. Label is the easy one (planning doc §6.1): it is
-# already written in history — is_promoted (CNF or RAC = "can travel") -> 1,
-# else 0. No counterfactual to construct.
-#
-# Leakage discipline (planning doc §6.2/§6.3):
-#   * Position feature = booking_position (the as-of-booking number). The FINAL
-#     current_position / is_promoted / promoted_* ARE the label -> BANNED as
-#     features. (v1: one row per WL booking; serve feeds current_position into the
-#     same slot — a mild, documented semantic gap, §6.3.)
-#   * days_to_journey = booking lead (journey_date - booked_at) at train time;
-#     serve uses days remaining. Everything is taken as-of the booking moment.
-#   * route_cancel_rate = train+class historical cancel rate (same quantity L1 and
-#     serving compute), with the cold-start fallback below MIN_HISTORY.
-#
-# Asymmetric cost — INVERTED vs the fare advisor (planning doc §6.4):
-#   A false "will confirm" leaves the user stranded (expensive); a false "won't
-#   confirm" only wastes a backup look (cheap). So we SAFE-BIAS TOWARD PESSIMISM:
-#     * scale_pos_weight = balance * PESSIMISM_WEIGHT (< balance) -> the model is
-#       RELUCTANT to predict "confirm" (the one strong bias).
-#     * PRIMARY metric = precision of the "relax/HIGH" call (when we say relax, are
-#       we right?) + the false-confirm guardrail. Accuracy is NOT the gate (§6.5).
-#
-# Usage:
-#   APP_ENV=local ./venv/bin/python scripts/phase-2/train_waitlist_predictor.py
 import asyncio
 import json
 import sys
@@ -39,6 +12,18 @@ import random
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+try:
+    import joblib
+    import numpy as np
+    import xgboost as xgb
+    from sklearn.metrics import confusion_matrix, precision_score, recall_score
+except ImportError as _ml_import_error:
+    print(
+        f"\n[ERROR] ML deps missing ({_ml_import_error}). "
+        "Need xgboost + scikit-learn (+ libomp on macOS)."
+    )
+    sys.exit(1)
 
 from app.ai.pipelines.waitlist_predictor_features import (
     CLASS_ORDER,
@@ -199,16 +184,6 @@ async def main() -> None:
     Xte, yte = build_xy(test_rows)
     print(f"\n  Train rows         : {len(Xtr):,}  (test {len(Xte):,})")
 
-    try:
-        import numpy as np
-        import xgboost as xgb
-        from sklearn.metrics import confusion_matrix, precision_score, recall_score
-    except ImportError as e:
-        print(
-            f"\n[ERROR] ML deps missing ({e}). Need xgboost + scikit-learn (+ libomp on macOS)."
-        )
-        return
-
     Xtr_a, ytr_a = np.array(Xtr, float), np.array(ytr)
     Xte_a, yte_a = np.array(Xte, float), np.array(yte)
     pos_tr = int(ytr_a.sum())
@@ -277,8 +252,6 @@ async def main() -> None:
     )
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    import joblib
-
     joblib.dump(model, PKL_PATH)
     ENCODERS_PATH.write_text(
         json.dumps(

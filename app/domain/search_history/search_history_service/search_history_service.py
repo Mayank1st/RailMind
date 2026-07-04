@@ -13,6 +13,7 @@ from app.domain.search_history.constants.search_history import (
     RECENT_SEARCH_CACHE_TTL,
     RECENT_SEARCH_MAX,
 )
+from app.db.models.search_events import SearchEvents
 from app.db.models.search_histories import SearchHistories
 from app.db.models.train import Stations
 from app.domain.search_history.dto.search_history_response_dto import (
@@ -73,6 +74,38 @@ class SearchHistoryService:
         await db.commit()
 
         await redis.delete(f"{RECENT_SEARCH_CACHE_PREFIX}{user_id}")
+        return True
+
+    async def log_search_event(
+        self,
+        db: AsyncSession,
+        user_id: Optional[str],
+        session_hash: Optional[str],
+        from_code: str,
+        to_code: str,
+        journey_date: Optional[date] = None,
+        train_class: Optional[str] = None,
+        quota: Optional[str] = None,
+    ) -> bool:
+        """Append-only analytics event — every search, guests included. Identity
+        for downstream dedupe is user_id (logged-in) or session_hash (guest)."""
+        codes = await self._resolve_station_ids(db, from_code, to_code)
+        if codes is None:
+            return False
+        src_id, dst_id = codes
+
+        db.add(
+            SearchEvents(
+                user_id=user_id,
+                session_hash=session_hash,
+                source_station_id=src_id,
+                destination_station_id=dst_id,
+                journey_date=journey_date,
+                train_class=train_class,
+                quota=quota,
+            )
+        )
+        await db.commit()
         return True
 
     async def _trim_to_cap(self, db: AsyncSession, user_id: str) -> None:

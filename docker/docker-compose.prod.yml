@@ -24,6 +24,11 @@ services:
   celery_worker:
     restart: unless-stopped
 
+  # Beat MUST survive reboots — weekly trending + daily cleanup schedules die
+  # silently otherwise.
+  celery_beat:
+    restart: unless-stopped
+
   postgres:
     restart: unless-stopped
 

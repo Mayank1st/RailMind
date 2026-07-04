@@ -7,7 +7,8 @@ from app.domain.booking.constants.booking import MAX_ADVANCE_BOOKING_DAYS
 from app.domain.train.train_service.train_service import TrainService
 from app.utils.helpers import parse_datetime_flexible
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.integrations.gemini_client import gemini_client
+from app.integrations.replicate_client import replicate_client
+from app.integrations.replicate_models import MODEL1
 from app.ai.prompts.nlp_search_prompts import nlp_search_prompt
 from app.domain.train.dto.train_request_dto import (
     CheckSeatAvailabilityDTO,
@@ -37,7 +38,7 @@ class NlpSearchService:
             user_query=plain_text,
         )
 
-        response_data = await gemini_client(prompt=prompt_response)
+        response_data = await replicate_client(prompt=prompt_response, model=MODEL1)
         parsed_data = self.extract_json_from_llm(response_data)
 
         print("parsed_data===============>", parsed_data)
@@ -69,7 +70,7 @@ class NlpSearchService:
             payload = CheckSeatAvailabilityDTO(
                 from_station=train["from_station"],
                 to_station=train["to_station"],
-                journey_date=journey_date,
+                journey_date=jd,
                 train_class=parsed_data.get("train_class"),
                 quota=parsed_data.get("quota"),
             )

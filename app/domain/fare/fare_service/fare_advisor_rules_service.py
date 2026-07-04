@@ -26,6 +26,7 @@ from app.domain.fare.constants.fare_advisor import (
     AdvisorSource,
     BookingVelocity,
 )
+from app.domain.fare.fare_service.holiday_context import nearby_holiday_name
 
 
 class FareAdvisorRulesService:
@@ -49,8 +50,11 @@ class FareAdvisorRulesService:
         sig = await self.gather_signals(
             db, train_number, train_class, quota, journey_date
         )
+        holiday = nearby_holiday_name(journey_date)  # display-only; never the decision
         if not sig["has_inventory"]:
-            return self.no_inventory_result(sig["days_to_journey"], sig["velocity"])
+            return self.no_inventory_result(
+                sig["days_to_journey"], sig["velocity"], nearby_holiday=holiday
+            )
 
         decision, confidence = self._decide(
             sig["available"],
@@ -66,6 +70,7 @@ class FareAdvisorRulesService:
             days_to_journey=sig["days_to_journey"],
             velocity=sig["velocity"],
             waitlist_pressure=sig["waitlist_pressure"],
+            nearby_holiday=holiday,
         )
 
     # ── Shared signal gathering (reused by the L2 model service) ───────────────
@@ -264,9 +269,12 @@ class FareAdvisorRulesService:
             sig = sigs[
                 (j["train_number"], j["train_class"], j["quota"], j["journey_date"])
             ]
+            holiday = nearby_holiday_name(j["journey_date"])
             if not sig["has_inventory"]:
                 out.append(
-                    self.no_inventory_result(sig["days_to_journey"], sig["velocity"])
+                    self.no_inventory_result(
+                        sig["days_to_journey"], sig["velocity"], nearby_holiday=holiday
+                    )
                 )
                 continue
             decision, confidence = self._decide(
@@ -284,6 +292,7 @@ class FareAdvisorRulesService:
                     sig["days_to_journey"],
                     sig["velocity"],
                     sig["waitlist_pressure"],
+                    nearby_holiday=holiday,
                 )
             )
         return out
@@ -340,6 +349,7 @@ class FareAdvisorRulesService:
         days_to_journey: int,
         velocity: BookingVelocity,
         source: str = AdvisorSource.RULES.value,
+        nearby_holiday: str | None = None,
     ) -> dict:
         """No live inventory row (date not seeded / far out). Fall back to a
         proximity heuristic at low confidence — safe-bias near the journey. The
@@ -356,6 +366,7 @@ class FareAdvisorRulesService:
             velocity=velocity,
             waitlist_pressure=None,
             source=source,
+            nearby_holiday=nearby_holiday,
         )
 
     # ── Result assembly (shared L1/L2) ────────────────────────────────────────
@@ -369,16 +380,20 @@ class FareAdvisorRulesService:
         velocity: BookingVelocity,
         waitlist_pressure: float | None,
         source: str = AdvisorSource.RULES.value,
+        nearby_holiday: str | None = None,
     ) -> dict:
         return {
             "decision": decision.value,
             "confidence": confidence,
-            "reason": self.build_reason(decision, fill_rate, days_to_journey),
+            "reason": self.build_reason(
+                decision, fill_rate, days_to_journey, nearby_holiday
+            ),
             "signals": {
                 "fill_rate": fill_rate,
                 "days_to_journey": days_to_journey,
                 "booking_velocity": velocity.value,
                 "waitlist_pressure": waitlist_pressure,
+                "nearby_holiday": nearby_holiday,
             },
             "source": source,
         }
@@ -388,9 +403,32 @@ class FareAdvisorRulesService:
         decision: AdvisorDecision,
         fill_rate: float | None,
         days_to_journey: int,
+        nearby_holiday: str | None = None,
     ) -> str:
         """Deterministic templated reason. Level-3 (Gemini) will later turn the
-        decision + signals into a richer natural-language nudge."""
+        decision + signals into a richer natural-language nudge. `nearby_holiday`
+        is display-only — it enriches the wording, never the decision."""
+        base = self._base_reason(decision, fill_rate, days_to_journey)
+        if nearby_holiday:
+            if decision is AdvisorDecision.CAN_WAIT:
+                # Decision stays CAN_WAIT — don't manufacture urgency from a festival.
+                base += (
+                    f" ({nearby_holiday} is around your travel date, but there's still "
+                    f"room for now.)"
+                )
+            else:
+                base += (
+                    f" {nearby_holiday} falls around your travel date, so this route "
+                    f"usually gets busy — book in time."
+                )
+        return base
+
+    def _base_reason(
+        self,
+        decision: AdvisorDecision,
+        fill_rate: float | None,
+        days_to_journey: int,
+    ) -> str:
         # No live availability (no inventory row) — don't reference a fill %.
         if fill_rate is None:
             if decision is AdvisorDecision.CAN_WAIT:

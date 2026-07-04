@@ -1,6 +1,7 @@
 import uuid
 from pathlib import Path
 
+import httpx
 from fastapi import status
 from supabase import create_client, Client
 from app.config import settings
@@ -23,9 +24,9 @@ def get_supabase_client() -> Client:
 def upload_pdf_to_supabase(pdf_bytes: bytes, file_name: str) -> str:
     client = get_supabase_client()
 
-    storage_path = f"tickets/{file_name}"
+    storage_path = f"{settings.SUPABASE_TICKET_FOLDER}/{file_name}"
 
-    client.storage.from_(settings.SUPABASE_TICKET_BUCKET).upload(
+    client.storage.from_(settings.SUPABASE_BUCKET).upload(
         path=storage_path,
         file=pdf_bytes,
         file_options={"content-type": "application/pdf", "upsert": "true"},
@@ -33,7 +34,7 @@ def upload_pdf_to_supabase(pdf_bytes: bytes, file_name: str) -> str:
 
     public_url = (
         f"{settings.SUPABASE_URL}/storage/v1/object/public/"
-        f"{settings.SUPABASE_TICKET_BUCKET}/{storage_path}"
+        f"{settings.SUPABASE_BUCKET}/{storage_path}"
     )
 
     return public_url
@@ -72,12 +73,12 @@ def upload_image_to_supabase(
     else:
         final_name = f"{base_name}{extension}"
 
-    storage_path = f"{folder}/{final_name}"
+    storage_path = f"{settings.SUPABASE_IMAGE_FOLDER}/{folder}/{final_name}"
 
     # ── Upload (upsert=true overwrites if path exists) ─────────────────────
     client = get_supabase_client()
     try:
-        client.storage.from_(settings.SUPABASE_IMAGE_BUCKET).upload(
+        client.storage.from_(settings.SUPABASE_BUCKET).upload(
             path=storage_path,
             file=file_bytes,
             file_options={
@@ -92,6 +93,39 @@ def upload_image_to_supabase(
             status_code=status.HTTP_502_BAD_GATEWAY,
         ) from e
 
-    return client.storage.from_(settings.SUPABASE_IMAGE_BUCKET).get_public_url(
-        storage_path
+    return client.storage.from_(settings.SUPABASE_BUCKET).get_public_url(storage_path)
+
+
+def file_public_url_if_exists(bucket: str, folder: str, file_name: str) -> str | None:
+    """Public URL of folder/file_name in a PUBLIC bucket, or None when missing.
+    Checked via the public endpoint (HEAD) — works without any RLS policy,
+    unlike the storage list API."""
+    public_url = (
+        f"{settings.SUPABASE_URL}/storage/v1/object/public/"
+        f"{bucket}/{folder}/{file_name}"
     )
+    response = httpx.head(public_url, timeout=15)
+    if response.status_code == status.HTTP_200_OK:
+        return public_url
+    return None
+
+
+def upload_public_file(
+    bucket: str, storage_path: str, file_bytes: bytes, content_type: str
+) -> str:
+    """Uploads (upsert) to an arbitrary bucket/path and returns the public URL."""
+    client = get_supabase_client()
+    try:
+        client.storage.from_(bucket).upload(
+            path=storage_path,
+            file=file_bytes,
+            file_options={"content-type": content_type, "upsert": "true"},
+        )
+    except Exception as e:
+        raise RailMindException(
+            code="RM-UPL-003",
+            message=f"Supabase upload failed: {str(e)}",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+        ) from e
+
+    return client.storage.from_(bucket).get_public_url(storage_path)

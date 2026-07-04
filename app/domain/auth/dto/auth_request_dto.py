@@ -241,6 +241,58 @@ class SendOtpDTO(BaseDTO):
     email: str
 
 
+# -- Reset Password -------------------------------------------------
+class ResetPasswordDTO(BaseDTO):
+    email: EmailStr  # account whose password is being reset
+    otp: str  # OTP from /forgot-password — the security gate
+
+    password: Annotated[
+        str,
+        Field(
+            min_length=8,
+            max_length=50,
+            examples=["Test@1234"],
+            description=(
+                "Strong password.\n\n"
+                "Requirements:\n"
+                "- Minimum 8 characters\n"
+                "- At least 1 uppercase letter (A-Z)\n"
+                "- At least 1 number (0-9)\n"
+                "- At least 1 special character from: @ $ ! % * ? &"
+            ),
+        ),
+    ]
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r"[@$!%*?&]", v):
+            raise ValueError(
+                "Password must contain at least one special character from @$!%*?&"
+            )
+        return v
+
+    confirm_password: Annotated[
+        str,
+        Field(
+            min_length=8,
+            max_length=50,
+            examples=["Test@1234"],
+            description="Must match the password field",
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def validate_passwords_match(self):
+        if self.password != self.confirm_password:
+            raise ValueError("Password and Confirm Password do not match")
+        return self
+
+
 # -- VerifyOtp -----------------------------------------------
 class VerifyOtpDTO(BaseDTO):
     email: str

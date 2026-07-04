@@ -11,4 +11,7 @@ from app.db.models.refund import *
 from app.db.models.faq import *
 from app.db.models.waiting_list import *
 from app.db.models.search_histories import *
+from app.db.models.search_events import *
 from app.db.models.user_behavior_logs import *
+from app.db.models.trending_routes import *
+from app.db.models.popular_destinations import *

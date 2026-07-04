@@ -1,9 +1,11 @@
 import unicodedata
 import asyncio
+from datetime import datetime, timezone
 from enum import Enum
 from jose import JWTError
 
 
+from numpy import where
 from sqlalchemy.orm import joinedload
 from pathlib import Path
 from sqlalchemy import or_, select
@@ -17,7 +19,11 @@ from app.db.models.user import (
     Users,
 )
 from app.utils.helpers import analyze_age_using_dob
-from app.domain.auth.dto.auth_request_dto import ContactDetailsDTO, LoginRequestDTO
+from app.domain.auth.dto.auth_request_dto import (
+    ContactDetailsDTO,
+    LoginRequestDTO,
+    ResetPasswordDTO,
+)
 from app.core.security import (
     COMMON_PASSWORD_SET,
     encode_sensistive_data,
@@ -775,6 +781,60 @@ class AuthService:
             "profile_photo": user.user_profile.profile_photo,
         }
 
+    async def reset_password(
+        self, payload: ResetPasswordDTO, db: AsyncSession, redis: Redis
+    ) -> dict:
+        email = payload.email.lower().strip()
+
+        # ── 1. Reject too-common passwords (strength regex already on the DTO) ──
+        if payload.password in COMMON_PASSWORD_SET:
+            raise RailMindException(
+                code="RM-AUTH-009",
+                message="Password is too common. Please choose a stronger password",
+                status_code=422,
+            )
+
+        # ── 2. Security gate: verify the OTP ──────────────────────────────────
+        await self.verify_otp(email=email, otp=payload.otp, db=db, redis=redis)
+
+        # ── 3. Set the new hashed password ────────────────────────────────────
+        result = await db.execute(select(Users).where(Users.email == email))
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise RailMindException(
+                code="RM-AUTH-004",
+                message="User not found",
+                status_code=404,
+            )
+
+        user.password = encode_sensistive_data(payload.password)
+        await db.flush()
+
+        # ── 4. Kill any existing session ──────────────────────────────────────
+        deleted = await redis.delete(f"refresh_token:{user.id}")
+        if deleted:
+            logger.info("Refresh token invalidated after reset for user_id=%s", user.id)
+
+        logger.info("Password reset successfully for email=%s", email)
+        return {"email": email}
+
+    async def forgot_password(self, email: str, db: AsyncSession, redis: Redis) -> dict:
+        email = email.lower().strip()
+
+        user = await db.execute(select(Users).where(Users.email == email))
+        results = user.scalar_one_or_none()
+
+        if results is not None:
+            try:
+                await self.send_otp(email=results.email, db=db, redis=redis)
+            except RailMindException as exc:
+                if exc.code != "RM-AUTH-011":
+                    raise
+        else:
+            logger.info("forgot_password requested for unknown email=%s", email)
+
+        return {"email": email}
+
     async def logout_user(
         self,
         current_user: dict,
@@ -788,8 +848,6 @@ class AuthService:
 
         # ── 1. Blacklist access token JTI in Redis ────────────────────────────────
         if jti and exp:
-            from datetime import datetime, timezone
-
             remaining = int(exp - datetime.now(timezone.utc).timestamp())
             if remaining > 0:
                 await redis.setex(f"blacklist:{jti}", remaining, "1")

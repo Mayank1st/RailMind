@@ -7,6 +7,7 @@ from app.domain.auth.dto.auth_request_dto import (
     ContactDetailsDTO,
     LoginRequestDTO,
     SendOtpDTO,
+    ResetPasswordDTO,
     VerifyOtpDTO,
     UpdateUserProfileDTO,
 )
@@ -16,7 +17,6 @@ from app.core.response import created, ok
 from app.domain.auth.constants.auth_user import REFRESH_TOKEN_COOKIE_NAME
 from app.core.exceptions import RailMindException
 from app.domain.auth.dto.google_auth_request_dto import GoogleAuthRequestDTO
-from app.domain.auth.dto.google_auth_response_dto import GoogleAuthResponseDTO
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -153,3 +153,32 @@ async def logout_user(
 ):
     data = await auth_service.logout_user(current_user, response, redis)
     return ok(data=data, message="Logged out successfully.")
+
+
+@router.post(
+    "/forgot-password",
+    dependencies=[Depends(rate_limit(limit=10, scope="auth_forgot_password"))],
+)
+async def forgot_password(
+    payload: SendOtpDTO,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    data = await auth_service.forgot_password(payload.email, db, redis)
+    return ok(
+        data=data,
+        message="If an account exists for this email, an OTP has been sent.",
+    )
+
+
+@router.post(
+    "/reset-password",
+    dependencies=[Depends(rate_limit(limit=10, scope="auth_reset_password"))],
+)
+async def reset_password(
+    payload: ResetPasswordDTO,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    data = await auth_service.reset_password(payload, db, redis)
+    return ok(data=data, message="Password updated successfully.")

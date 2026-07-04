@@ -13,6 +13,18 @@ import random
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+try:
+    import joblib
+    import numpy as np
+    import xgboost as xgb
+    from sklearn.metrics import confusion_matrix, precision_score, recall_score
+except ImportError as _ml_import_error:
+    print(
+        f"\n[ERROR] ML deps missing ({_ml_import_error}). "
+        "Need xgboost + scikit-learn (+ libomp on macOS)."
+    )
+    sys.exit(1)
+
 from app.ai.pipelines.fare_advisor_features import (
     FEATURE_ORDER,
     MODEL_VERSION,
@@ -192,16 +204,6 @@ async def main() -> None:
         )
         return
 
-    try:
-        import numpy as np
-        import xgboost as xgb
-        from sklearn.metrics import confusion_matrix, precision_score, recall_score
-    except ImportError as e:
-        print(
-            f"\n[ERROR] ML deps missing ({e}). Need xgboost + scikit-learn (+ libomp on macOS)."
-        )
-        return
-
     Xtr_a, ytr_a = np.array(Xtr, float), np.array(ytr)
     Xte_a, yte_a = np.array(Xte, float), np.array(yte)
     neg, pos = len(ytr) - pos_tr, pos_tr
@@ -247,8 +249,6 @@ async def main() -> None:
 
     # ── persist artifact ──────────────────────────────────────────────────────
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    import joblib
-
     joblib.dump(model, PKL_PATH)
     ENCODERS_PATH.write_text(
         json.dumps(

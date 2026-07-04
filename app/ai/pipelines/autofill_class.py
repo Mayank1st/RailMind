@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import joblib
+import numpy as np
+
 from app.ai.pipelines.autofill_features import (
     IDX_TO_CLASS,
     MODEL_VERSION,
@@ -36,8 +39,6 @@ class AutofillClassModel:
     def _load(cls) -> None:
         if cls._model is not None:
             return
-        import joblib  # local import: keeps xgboost/joblib off the hot startup path
-
         cls._model = joblib.load(MODEL_PATH)
         cls._encoders = json.loads(ENCODERS_PATH.read_text())
 
@@ -45,8 +46,6 @@ class AutofillClassModel:
     def predict(cls, raw_features: dict) -> dict:
         """Returns {value, confidence, model_version}. confidence = max softprob."""
         cls._load()
-        import numpy as np
-
         vector = encode_row(raw_features, cls._encoders)
         proba = cls._model.predict_proba(np.array([vector], dtype=float))[0]
         idx = int(proba.argmax())
