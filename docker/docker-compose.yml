@@ -18,6 +18,11 @@
 # overridden in `environment:`, which takes precedence over env_file.
 # ════════════════════════════════════════════════════════════════════════════════
 
+# Pin the compose project name — volumes/networks are namespaced by it, so an
+# unpinned name (derived from the -f file's directory) would create a fresh
+# EMPTY postgres volume instead of reusing railmind_* (seen on the VM 2026-07-05).
+name: railmind
+
 services:
   # ─────────────────────────────────────────────────────────────────────────────
   # PostgreSQL Database
@@ -117,6 +122,18 @@ services:
     networks:
       - railmind_network
     command: celery -A app.tasks.celery_app worker --loglevel=info
+    # Override the image's baked-in HEALTHCHECK (curls the API port — no uvicorn
+    # runs here, so it would always report unhealthy). Ping the worker instead.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A app.tasks.celery_app inspect ping --timeout 10 | grep -q pong",
+        ]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Celery Beat (for scheduled tasks - Phase 2+)
@@ -136,6 +153,10 @@ services:
     networks:
       - railmind_network
     command: celery -A app.tasks.celery_app beat --loglevel=info
+    # Beat has no probe-able endpoint; disable the image's API-port HEALTHCHECK
+    # (always-failing noise). Crash recovery is the restart policy's job.
+    healthcheck:
+      disable: true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Named Volumes for Data Persistence

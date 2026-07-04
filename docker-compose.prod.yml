@@ -1,0 +1,147 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# RailMind — PRODUCTION stack (GCP VM). This is THE file the VM deploy uses.
+#
+# Deploy (from the repo root, ~/railmind on the VM):
+#   git pull
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d --remove-orphans
+#   docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+#   docker compose -f docker-compose.prod.yml ps
+#
+# .env is auto-loaded from the repo root (this file's directory). All mem_limits
+# are tuned for the small VM — keep the whole stack under ~1.2GB.
+# (docker/docker-compose.yml is the separate LOCAL dev stack — not used here.)
+# ════════════════════════════════════════════════════════════════════════════════
+
+# Pin the compose project name — volumes/networks are namespaced by it, so an
+# unpinned name would create a fresh EMPTY postgres volume when run from a
+# different directory (seen on the VM 2026-07-05).
+name: railmind
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: railmind_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c max_connections=30
+      -c effective_cache_size=256MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=32MB
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    mem_limit: 300m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - railmind_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: railmind_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 80mb --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    mem_limit: 100m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - railmind_network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: railmind-backend:latest
+    container_name: railmind_backend
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"
+    mem_limit: 350m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - railmind_network
+
+  celery_worker:
+    image: railmind-backend:latest
+    container_name: railmind_celery
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1
+    # The image's baked-in HEALTHCHECK curls the API port — no uvicorn runs in
+    # this container, so it would always report unhealthy. Disabled on purpose.
+    healthcheck:
+      disable: true
+    mem_limit: 250m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - railmind_network
+
+  celery_beat:
+    image: railmind-backend:latest
+    container_name: railmind_celery_beat
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.tasks.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    healthcheck:
+      disable: true
+    mem_limit: 150m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - railmind_network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: railmind_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    mem_limit: 50m
+    networks:
+      - railmind_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  railmind_network:
+    driver: bridge

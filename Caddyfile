@@ -1,0 +1,8 @@
+railmind.ddns.net {
+    encode gzip zstd
+
+    @static_api path /api/v1/common/stations*
+    header @static_api Cache-Control "public, max-age=86400, stale-while-revalidate=604800"
+
+    reverse_proxy backend:8000
+}
