@@ -1,7 +1,19 @@
 from __future__ import annotations
 
+from datetime import date
+from uuid import UUID
+
 from celery.utils.log import get_task_logger
 
+from app.domain.booking.booking_service import chart_preparation_service as _chart_prep
+from app.db.session import async_session_local
+from app.domain.booking.constants.chart_preparation import (
+    CHART_STAGE_1_WINDOW_MAX_HOURS,
+    CHART_STAGE_1_WINDOW_MIN_HOURS,
+    CHART_STAGE_2_WINDOW_MAX_HOURS,
+    CHART_STAGE_2_WINDOW_MIN_HOURS,
+    ChartStatus,
+)
 from app.tasks.celery_app import celery_app
 from app.tasks.worker_loop import run_in_worker_loop as _run_in_worker_loop
 
@@ -12,26 +24,14 @@ logger = get_task_logger(__name__)
 
 
 async def _discover() -> tuple[int, int]:
-    from app.domain.booking.constants.chart_preparation import (
-        CHART_STAGE_1_WINDOW_MAX_HOURS,
-        CHART_STAGE_1_WINDOW_MIN_HOURS,
-        CHART_STAGE_2_WINDOW_MAX_HOURS,
-        CHART_STAGE_2_WINDOW_MIN_HOURS,
-        ChartStatus,
-    )
-    from app.db.session import async_session_local
-    from app.domain.booking.booking_service.chart_preparation_service import (
-        chart_preparation_service,
-    )
-
     async with async_session_local() as db:
-        stage1 = await chart_preparation_service.find_eligible_train_dates(
+        stage1 = await _chart_prep.chart_preparation_service.find_eligible_train_dates(
             db,
             min_hours=CHART_STAGE_1_WINDOW_MIN_HOURS,
             max_hours=CHART_STAGE_1_WINDOW_MAX_HOURS,
             required_status=ChartStatus.NOT_PREPARED,
         )
-        stage2 = await chart_preparation_service.find_eligible_train_dates(
+        stage2 = await _chart_prep.chart_preparation_service.find_eligible_train_dates(
             db,
             min_hours=CHART_STAGE_2_WINDOW_MIN_HOURS,
             max_hours=CHART_STAGE_2_WINDOW_MAX_HOURS,
@@ -64,16 +64,8 @@ def task_check_chart_preparation_due() -> None:
 
 
 async def _prepare(train_id: str, journey_date: str, stage: int) -> None:
-    from datetime import date
-    from uuid import UUID
-
-    from app.db.session import async_session_local
-    from app.domain.booking.booking_service.chart_preparation_service import (
-        chart_preparation_service,
-    )
-
     async with async_session_local() as db:
-        await chart_preparation_service.prepare_chart(
+        await _chart_prep.chart_preparation_service.prepare_chart(
             db, UUID(train_id), date.fromisoformat(journey_date), stage
         )
 

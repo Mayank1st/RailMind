@@ -1,9 +1,23 @@
+import hashlib
+import hmac
+
 import pytz
 import filetype
 
 from datetime import datetime, timezone, date, timedelta
 
+from app.config import settings
+
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "application/pdf"}
+
+
+def build_session_hash(client_ip: str, user_agent: str) -> str:
+    """Pseudonymous guest identity for search analytics: HMAC-SHA256 of IP+UA
+    with the server secret — stable per device/session, no raw PII stored."""
+    message = f"{client_ip}|{user_agent}".encode()
+    return hmac.new(
+        settings.HMAC_SECRET_KEY.encode(), message, hashlib.sha256
+    ).hexdigest()
 
 
 def get_utc_timezone():

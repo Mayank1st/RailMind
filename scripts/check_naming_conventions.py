@@ -15,6 +15,7 @@ MODEL_PATH_MARKERS = ("/models/",)
 RULE_SNAKE_CASE_FUNCTIONS = True
 RULE_DTO_SUFFIX = True
 RULE_SINGULAR_MODELS = False  # models are PLURAL in RailMind -> rule off
+RULE_TOP_LEVEL_IMPORTS = True  # no lazy loading — imports live at module top
 
 SINGULAR_ALLOWLIST = {
     "Address",
@@ -67,6 +68,20 @@ def line_has_ignore(src_lines: list[str], lineno: int) -> bool:
     return False
 
 
+def range_has_ignore(src_lines: list[str], start: int, end: int) -> bool:
+    """Ignore-tag lookup across a multi-line statement (e.g. a class signature
+    split over several lines — the tag may sit on the closing-paren line)."""
+    return any(line_has_ignore(src_lines, ln) for ln in range(start, end + 1))
+
+
+def signature_end(node: ast.AST) -> int:
+    """Last line of a def/class signature: the line before its body starts."""
+    body = getattr(node, "body", None)
+    if body:
+        return body[0].lineno - 1
+    return node.lineno
+
+
 def check_file(path: Path) -> list[str]:
     errors: list[str] = []
     try:
@@ -80,24 +95,39 @@ def check_file(path: Path) -> list[str]:
 
     src_lines = src.splitlines()
     is_dto, is_model = classify(path)
+    flagged_import_lines: set[int] = set()  # nested defs walk twice — dedupe
 
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if RULE_SNAKE_CASE_FUNCTIONS and not is_dunder(node.name):
-                if not is_snake_case(node.name) and not line_has_ignore(
-                    src_lines, node.lineno
+                if not is_snake_case(node.name) and not range_has_ignore(
+                    src_lines, node.lineno, signature_end(node)
                 ):
                     errors.append(
                         f"{path}:{node.lineno}: function '{node.name}' must be snake_case"
                     )
+            if RULE_TOP_LEVEL_IMPORTS:
+                for sub in ast.walk(node):
+                    if (
+                        isinstance(sub, (ast.Import, ast.ImportFrom))
+                        and sub.lineno not in flagged_import_lines
+                    ):
+                        flagged_import_lines.add(sub.lineno)
+                        if not range_has_ignore(
+                            src_lines, sub.lineno, sub.end_lineno or sub.lineno
+                        ):
+                            errors.append(
+                                f"{path}:{sub.lineno}: function-level import — "
+                                "move it to module top level (no lazy loading)"
+                            )
         elif isinstance(node, ast.ClassDef):
             if is_dto and RULE_DTO_SUFFIX and not node.name.endswith("DTO"):
-                if not line_has_ignore(src_lines, node.lineno):
+                if not range_has_ignore(src_lines, node.lineno, signature_end(node)):
                     errors.append(
                         f"{path}:{node.lineno}: class '{node.name}' in a DTO file must end with 'DTO'"
                     )
             if is_model and RULE_SINGULAR_MODELS and looks_plural(node.name):
-                if not line_has_ignore(src_lines, node.lineno):
+                if not range_has_ignore(src_lines, node.lineno, signature_end(node)):
                     errors.append(
                         f"{path}:{node.lineno}: model '{node.name}' must be singular, not plural"
                     )

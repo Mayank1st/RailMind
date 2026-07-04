@@ -15,6 +15,7 @@ from app.db.models.booking import BookingPassengers
 from app.db.models.train import SeatInventories, TrainStations
 from app.db.models.waiting_list import WaitlistEntries
 from app.domain.booking.booking_service.booking_service import booking_service
+from app.tasks import chart_preparation_tasks as _chart_tasks
 
 logger = logging.getLogger(__name__)
 _IST = ZoneInfo("Asia/Kolkata")
@@ -258,10 +259,8 @@ class ChartPreparationService:
         if not changes:
             return
         try:
-            from app.tasks.chart_preparation_tasks import task_send_chart_notification
-
             for ch in changes:
-                task_send_chart_notification.delay(
+                _chart_tasks.task_send_chart_notification.delay(
                     booking_passenger_id=ch["booking_passenger_id"],
                     old_status=ch["old_status"],
                     new_status=ch["new_status"],

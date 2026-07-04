@@ -45,6 +45,10 @@ URGENT_HORIZON_DAYS = 2
 # with an aggressive threshold — that double-biases into always-BOOK_NOW).
 BOOK_NOW_P = 0.30
 
+# ── Holiday-aware reason (display-only; NOT a decision/model input) ────────────
+HOLIDAY_LOOKAHEAD_DAYS = 7
+HOLIDAY_LOOKBEHIND_DAYS = 2
+
 # ── High-fill safety floor (serving overlay; asymmetric cost §8.3) ─────────────
 # A near-full journey is risky enough to NEVER advise waiting, even if the model
 # (reading slow recent demand) predicts no imminent sellout — a wrong CAN_WAIT at

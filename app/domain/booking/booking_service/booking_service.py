@@ -19,6 +19,8 @@ from app.domain.booking.constants.booking import (
     JourneyActionType,
     BookingJourneyFilter,
     CANCELLED_BOOKING_STATUSES,
+    MAX_PASSENGERS_PER_BOOKING,
+    MAX_PASSENGERS_PER_TATKAL_BOOKING,
 )
 from fastapi_pagination import Params
 from fastapi_pagination.ext.sqlalchemy import apaginate
@@ -1164,11 +1166,6 @@ class BookingService:
         passenger_count: int,
         quota: str,
     ) -> None:
-        from app.domain.booking.constants.booking import (
-            MAX_PASSENGERS_PER_BOOKING,
-            MAX_PASSENGERS_PER_TATKAL_BOOKING,
-        )
-
         if quota in (Quota.TATKAL, Quota.PREMIUM_TATKAL):
             if passenger_count > MAX_PASSENGERS_PER_TATKAL_BOOKING:
                 raise RailMindException(

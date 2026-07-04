@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi_filter import FilterDepends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_current_user_optional, get_db, get_redis
@@ -14,7 +14,11 @@ from app.domain.train.dto.train_request_dto import (
     CheckSeatAvailabilityDTO,
 )
 from app.domain.train.dto.train_filter_dto import TrainFilterDTO
-from app.tasks.search_history_tasks import task_log_search_history
+from app.tasks.search_history_tasks import (
+    task_log_search_event,
+    task_log_search_history,
+)
+from app.utils.helpers import build_session_hash
 
 logger = logging.getLogger(__name__)
 
@@ -25,22 +29,44 @@ train_service = TrainService()
 @router.post("/search")
 async def search_trains(
     payload: SearchTrainDTO,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_optional),
 ):
     result = await train_service.search_trains(payload, db)
-    if current_user and payload.toStationCode:
+    if payload.toStationCode:
         try:
-            task_log_search_history.delay(
-                user_id=current_user["sub"],
+            task_log_search_event.delay(
                 from_code=payload.fromStationCode.upper(),
                 to_code=payload.toStationCode.upper(),
+                user_id=current_user["sub"] if current_user else None,
+                session_hash=(
+                    None
+                    if current_user
+                    else build_session_hash(
+                        request.client.host if request.client else "",
+                        request.headers.get("user-agent", ""),
+                    )
+                ),
                 journey_date=payload.journey_date.isoformat(),
                 train_class=payload.train_class.value if payload.train_class else None,
                 quota=payload.quota.value if payload.quota else None,
             )
+            # Recent-searches feature — logged-in only (guests keep it in FE
+            # localStorage).
+            if current_user:
+                task_log_search_history.delay(
+                    user_id=current_user["sub"],
+                    from_code=payload.fromStationCode.upper(),
+                    to_code=payload.toStationCode.upper(),
+                    journey_date=payload.journey_date.isoformat(),
+                    train_class=(
+                        payload.train_class.value if payload.train_class else None
+                    ),
+                    quota=payload.quota.value if payload.quota else None,
+                )
         except Exception:
-            logger.warning("failed to enqueue search-history log", exc_info=True)
+            logger.warning("failed to enqueue search logging", exc_info=True)
 
     return ok(
         data=result["items"],

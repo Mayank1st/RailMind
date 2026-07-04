@@ -100,11 +100,18 @@ class Settings(BaseSettings):
     GEMINI_TEMPERATURE: float = 0.2
     GEMINI_MAX_OUTPUT_TOKENS: int = 2048
 
-    # SUPABASE
+    # REPLICATE API
+    REPLICATE_API_TOKEN: str = ""
+    REPLICATE_TEMPERATURE: float = 0.2
+    REPLICATE_MAX_TOKENS: int = 2048
+
+    # SUPABASE — single root bucket; tickets/images/trending are folders inside it
     SUPABASE_URL: str
     SUPABASE_KEY: str
-    SUPABASE_TICKET_BUCKET: str
-    SUPABASE_IMAGE_BUCKET: str
+    SUPABASE_BUCKET: str = "railmind"
+    SUPABASE_TICKET_FOLDER: str = "tickets"
+    SUPABASE_IMAGE_FOLDER: str = "images"
+    SUPABASE_TRENDING_FOLDER: str = "trending"
 
     # PAYMENT
     PAYMENT_MODE: str = "mock"

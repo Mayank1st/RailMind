@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import joblib
+import numpy as np
+
 from app.ai.pipelines.fare_advisor_features import MODEL_VERSION, encode_row
 
 MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
@@ -23,8 +26,6 @@ class FareAdvisorModel:
     def _load(cls) -> None:
         if cls._model is not None:
             return
-        import joblib  # local import: keeps xgboost/joblib off the hot startup path
-
         cls._model = joblib.load(MODEL_PATH)
 
     @classmethod
@@ -38,8 +39,6 @@ class FareAdvisorModel:
         if not raw_list:
             return []
         cls._load()
-        import numpy as np
-
         matrix = np.array([encode_row(r) for r in raw_list], dtype=float)
         proba = cls._model.predict_proba(matrix)
         return [float(p[1]) for p in proba]

@@ -20,6 +20,7 @@ from app.domain.fare.constants.fare_advisor import (
 from app.domain.fare.fare_service.fare_advisor_rules_service import (
     FareAdvisorRulesService,
 )
+from app.domain.fare.fare_service.holiday_context import nearby_holiday_name
 
 
 class FareAdvisorModelService:
@@ -50,12 +51,14 @@ class FareAdvisorModelService:
         sig = await self._rules.gather_signals(
             db, train_number, train_class, quota, journey_date
         )
+        holiday = nearby_holiday_name(journey_date)  # display-only; never the decision
         # No live signals -> the model can't run; degrade to the rules fallback.
         if not sig["has_inventory"]:
             return self._rules.no_inventory_result(
                 sig["days_to_journey"],
                 sig["velocity"],
                 source=AdvisorSource.RULES.value,
+                nearby_holiday=holiday,
             )
 
         # URGENT is a present-state availability RULE — checked before the model.
@@ -68,6 +71,7 @@ class FareAdvisorModelService:
                 velocity=sig["velocity"],
                 waitlist_pressure=sig["waitlist_pressure"],
                 source=AdvisorSource.MODEL.value,
+                nearby_holiday=holiday,
             )
 
         # Forward-looking decision from the model's sell-out probability.
@@ -111,6 +115,7 @@ class FareAdvisorModelService:
             velocity=sig["velocity"],
             waitlist_pressure=sig["waitlist_pressure"],
             source=AdvisorSource.MODEL.value,
+            nearby_holiday=holiday,
         )
         result["model_version"] = MODEL_VERSION
         return result
@@ -127,11 +132,13 @@ class FareAdvisorModelService:
             sig = sigs[
                 (j["train_number"], j["train_class"], j["quota"], j["journey_date"])
             ]
+            holiday = nearby_holiday_name(j["journey_date"])
             if not sig["has_inventory"]:
                 results[i] = self._rules.no_inventory_result(
                     sig["days_to_journey"],
                     sig["velocity"],
                     source=AdvisorSource.RULES.value,
+                    nearby_holiday=holiday,
                 )
             elif self._rules.is_urgent(
                 sig["available"], sig["fill_rate"], sig["wl_count"]
@@ -144,6 +151,7 @@ class FareAdvisorModelService:
                     velocity=sig["velocity"],
                     waitlist_pressure=sig["waitlist_pressure"],
                     source=AdvisorSource.MODEL.value,
+                    nearby_holiday=holiday,
                 )
             else:
                 model_items.append((i, j, sig))
@@ -194,6 +202,7 @@ class FareAdvisorModelService:
                     velocity=sig["velocity"],
                     waitlist_pressure=sig["waitlist_pressure"],
                     source=AdvisorSource.MODEL.value,
+                    nearby_holiday=nearby_holiday_name(j["journey_date"]),
                 )
                 result["model_version"] = MODEL_VERSION
                 results[i] = result

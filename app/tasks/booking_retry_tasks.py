@@ -1,24 +1,30 @@
 from __future__ import annotations
 
+import traceback
+
+from celery.utils.log import get_task_logger
+from sqlalchemy import select
+
+from app.db.models.booking_retry_requests import BookingRetryRequest
+from app.db.models.train import Stations, Trains
+from app.db.session import async_session_local
+from app.domain.booking.booking_service.booking_retry_service import (
+    BookingRetryService,
+)
+from app.domain.booking.booking_service.booking_service import BookingService
+from app.domain.booking.constants.booking_retry_request import RetryFailureReason
+from app.domain.booking.dto.booking_request_dto import (
+    CreateBookingDTO,
+    PassengerBookingDTO,
+)
+from app.tasks import notification_tasks as _notification_tasks
 from app.tasks.celery_app import celery_app
 from app.tasks.worker_loop import run_in_worker_loop as _run_in_worker_loop
-from celery.utils.log import get_task_logger
 
 logger = get_task_logger(__name__)
 
 
 async def _async_retry_booking(retry_request_id: str) -> None:
-    from sqlalchemy import select
-
-    from app.db.session import async_session_local
-    from app.db.models.booking_retry_requests import BookingRetryRequest
-    from app.db.models.train import Trains, Stations
-    from app.domain.booking.booking_service.booking_retry_service import (
-        BookingRetryService,
-    )
-    from app.domain.booking.booking_service.booking_service import BookingService
-    from app.domain.booking.constants.booking_retry_request import RetryFailureReason
-
     retry_service = BookingRetryService()
     booking_service = BookingService()
 
@@ -75,11 +81,6 @@ async def _async_retry_booking(retry_request_id: str) -> None:
                     raise Exception("Train or station data missing")
 
                 # ── CreateBookingDTO reconstruct karo ─────────────────────────
-                from app.domain.booking.dto.booking_request_dto import (
-                    CreateBookingDTO,
-                    PassengerBookingDTO,
-                )
-
                 booking_dto = CreateBookingDTO(
                     train_number=train.train_number,
                     journey_date=payload["journey_date"],
@@ -110,8 +111,6 @@ async def _async_retry_booking(retry_request_id: str) -> None:
                 success = False
 
         except Exception as e:
-            import traceback
-
             print("RETRY ERROR:", str(e))
             traceback.print_exc()
             success = False
@@ -136,9 +135,7 @@ async def _async_retry_booking(retry_request_id: str) -> None:
         )
 
         if action == "success":
-            from app.tasks.notification_tasks import task_send_retry_success_email
-
-            task_send_retry_success_email.delay(
+            _notification_tasks.task_send_retry_success_email.delay(
                 user_id=user_id,
                 booking_id=new_booking_id,
             )
@@ -150,9 +147,7 @@ async def _async_retry_booking(retry_request_id: str) -> None:
             )
 
         elif action == "exhausted":
-            from app.tasks.notification_tasks import task_send_retry_exhausted_email
-
-            task_send_retry_exhausted_email.delay(
+            _notification_tasks.task_send_retry_exhausted_email.delay(
                 user_id=user_id,
                 booking_id=meta.get("original_booking_id"),
             )

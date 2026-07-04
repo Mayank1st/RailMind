@@ -31,6 +31,11 @@ Every module follows this top-to-bottom order:
 - `import` group first, then a blank line, then the `from ... import` group.
 - Order within: standard library -> third-party -> local app imports.
 - **No wildcard imports** (`from x import *`).
+- **All imports live at the top of the module — never inside a function or
+  method.** No lazy loading: do not defer imports into the function body to
+  dodge startup cost or a circular import. If moving an import to the top
+  reveals a genuine circular dependency, fix the dependency direction (extract
+  the shared piece) instead of hiding it with a function-level import.
 
 ```python
 import logging

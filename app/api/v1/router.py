@@ -22,6 +22,7 @@ from app.domain.search_history.search_history_router.search_history import (
 )
 from app.domain.station.station_router.stations import router as station_router
 from app.domain.train.train_router.train import router as train_router
+from app.domain.trending.trending_router.trending import router as trending_router
 from app.domain.waitlist.waitlist_router.waitlist import router as waitlist_router
 
 router = APIRouter()
@@ -43,3 +44,4 @@ router.include_router(faq_router)
 router.include_router(search_history_router)
 router.include_router(station_router)
 router.include_router(live_status_router)
+router.include_router(trending_router)

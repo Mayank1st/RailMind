@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import status
+from pytz import timezone as pytz_tz
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -225,8 +226,6 @@ class BookingRetryService:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _next_scheduled_time(self, hour_ist: int) -> datetime:
-        from pytz import timezone as pytz_tz
-
         ist = pytz_tz("Asia/Kolkata")
         now_ist = datetime.now(ist)
         target = now_ist.replace(hour=hour_ist, minute=0, second=0, microsecond=0)
