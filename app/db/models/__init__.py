@@ -1,4 +1,5 @@
 from app.db.models.user import *
+from app.db.models.admin_mfa import *
 from app.db.models.security_question import *
 from app.db.models.user_oauth_accounts import *
 from app.db.models.booking import *
@@ -15,3 +16,4 @@ from app.db.models.search_events import *
 from app.db.models.user_behavior_logs import *
 from app.db.models.trending_routes import *
 from app.db.models.popular_destinations import *
+from app.db.models.daily_seat_occupancy import *

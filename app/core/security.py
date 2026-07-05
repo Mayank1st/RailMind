@@ -110,6 +110,16 @@ def decrypt_kyc(encrypted_value: str) -> str:
     return _fernet.decrypt(encrypted_value.encode()).decode()
 
 
+def encrypt_secret(plain_value: str) -> str:
+    """Reversibly encrypt a sensitive secret (e.g. a TOTP seed) for storage."""
+    return _fernet.encrypt(plain_value.encode()).decode()
+
+
+def decrypt_secret(encrypted_value: str) -> str:
+    """Decrypt a secret encrypted by `encrypt_secret`. Raises on tamper/wrong key."""
+    return _fernet.decrypt(encrypted_value.encode()).decode()
+
+
 def mask_kyc(plain_value: str, visible_last: int = 4) -> str:
     """Mask all but the last N chars — e.g. 'XXXXXXXX2345' for display."""
     if len(plain_value) <= visible_last:
@@ -180,6 +190,40 @@ def create_refresh_token(user_id: str, remember_me: bool = False) -> tuple[str, 
         algorithm=settings.JWT_ALGORITHM,
     )
     return token, jti
+
+
+# ─── Admin MFA pre-auth token ─────────────────────────────────────────────────
+# Short-lived token issued after admin password step, BEFORE the TOTP 2FA step.
+# `type` is NOT "access", so it can never be used as a real access token
+# (get_current_user / decode_access_token reject it).
+
+ADMIN_MFA_PENDING_TOKEN_TYPE = "admin_mfa_pending"
+
+
+def create_admin_mfa_pending_token(
+    user_id: str, ttl_seconds: int, remember_me: bool = False
+) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "jti": _generate_jti(),
+        "iat": now,
+        "exp": now + timedelta(seconds=ttl_seconds),
+        "type": ADMIN_MFA_PENDING_TOKEN_TYPE,
+        "remember_me": remember_me,  # carried so the post-2FA session honors it
+    }
+    return jwt.encode(
+        payload,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+
+def decode_admin_mfa_pending_token(token: str) -> dict:
+    payload = decode_token(token)
+    if payload.get("type") != ADMIN_MFA_PENDING_TOKEN_TYPE:
+        raise JWTError("Invalid token type — expected admin MFA pending token")
+    return payload
 
 
 # ─── Decode & Verify ──────────────────────────────────────────────────────────
