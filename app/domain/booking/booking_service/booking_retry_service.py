@@ -42,7 +42,7 @@ class BookingRetryService:
 
         if not booking:
             raise RailMindException(
-                code="RM-BKG-003",
+                code="RM-BKG-006",
                 message="Booking not found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )

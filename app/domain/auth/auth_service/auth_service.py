@@ -139,7 +139,7 @@ class AuthService:
         )
         if result.scalar_one_or_none():
             raise RailMindException(
-                code="RM-AUTH-010",
+                code="RM-AUTH-023",
                 message="Mobile number already registered",
                 status_code=409,
             )
@@ -279,7 +279,7 @@ class AuthService:
         # ── 3. Verify password ──
         if not verify_encoded_data(payload.password, user.password):
             raise RailMindException(
-                code="RM-AUTH-002",
+                code="RM-AUTH-001",
                 message="Incorrect password",
                 status_code=401,
             )
@@ -287,7 +287,7 @@ class AuthService:
         # ── 4. Check email verified ──
         if not user.is_email_verified:
             raise RailMindException(
-                code="RM-AUTH-003",
+                code="RM-AUTH-020",
                 message="Email is not verified. Please verify your email first",
                 status_code=403,
             )
@@ -475,7 +475,7 @@ class AuthService:
 
         if not user.is_active:
             raise RailMindException(
-                code="RM-AUTH-004",
+                code="RM-AUTH-021",
                 message="Account is disabled. Please contact support",
                 status_code=403,
             )
@@ -952,7 +952,7 @@ class AuthService:
         # disabled user ko session NAHI milna chahiye
         if not user.is_active:
             raise RailMindException(
-                code="RM-AUTH-004",
+                code="RM-AUTH-021",
                 message="Account is disabled. Please contact support",
                 status_code=403,
             )

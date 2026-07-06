@@ -82,5 +82,9 @@ def _register_task_modules() -> None:
     import app.tasks.trending_tasks  # noqa: F401  # naming: ignore
     import app.tasks.dashboard_tasks  # noqa: F401  # naming: ignore
 
+    # Connects task_prerun/task_postrun hooks that record beat-job runs into
+    # job_runs (admin Job/Cron Logs). Imported last so beat_schedule is set.
+    import app.tasks.job_run_signals  # noqa: F401  # naming: ignore
+
 
 _register_task_modules()

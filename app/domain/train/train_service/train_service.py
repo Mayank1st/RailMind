@@ -268,7 +268,7 @@ class TrainService:
 
         except Exception as e:
             raise RailMindException(
-                code="RM-TRAIN-001",
+                code="RM-TRN-006",
                 message="Failed to fetch train data",
                 status_code=500,
             )
@@ -345,7 +345,7 @@ class TrainService:
 
             if data is None:
                 raise RailMindException(
-                    code="RM-TRAIN-002",
+                    code="RM-TRN-006",
                     message="Failed to fetch train data",
                     status_code=status.HTTP_404_NOT_FOUND,
                 )
@@ -364,7 +364,7 @@ class TrainService:
 
             if data is None:
                 raise RailMindException(
-                    code="RM-TRAIN-003",
+                    code="RM-TRN-006",
                     message="Failed to fetch train data",
                     status_code=status.HTTP_404_NOT_FOUND,
                 )
@@ -645,13 +645,13 @@ class TrainService:
 
         if not from_stop:
             raise RailMindException(
-                code="RM-TRN-002",
+                code="RM-TRN-007",
                 message=f"Station {payload.from_station} not found on this train route",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         if not to_stop:
             raise RailMindException(
-                code="RM-TRN-002",
+                code="RM-TRN-007",
                 message=f"Station {payload.to_station} not found on this train route",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )

@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import InterfaceError, OperationalError, SQLAlchemyError
 
 from app.config import settings
+from app.core.error_log_writer import record_from_request
 from app.core.exceptions import DatabaseError, RailMindException
 from app.core.response import json_error, validation_error
 from app.utils.logger import logger
@@ -30,6 +31,7 @@ async def railmind_exception_handler(
         )
     else:
         logger.info(log_line, _ctx(request), exc.code, exc.status_code, exc.message)
+    await record_from_request(request, exc.code, exc.message, exc.status_code, exc=exc)
     return json_error(exc.message, status_code=exc.status_code, code=exc.code)
 
 
@@ -60,6 +62,10 @@ async def database_exception_handler(
         status_code = 500
         message = DatabaseError.message
 
+    await record_from_request(
+        request, DatabaseError.error_code, message, status_code, exc=exc
+    )
+
     # Surface the real cause in non-prod so developers don't have to dig in logs.
     if settings.DEBUG:
         message = f"{message} [{type(exc).__name__}: {exc}]"
@@ -74,6 +80,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         type(exc).__name__,
         exc,
         exc_info=exc,
+    )
+    await record_from_request(
+        request, "RM-GEN-001", "An unexpected error occurred", 500, exc=exc
     )
     return json_error(
         "An unexpected error occurred", status_code=500, code="RM-GEN-001"
