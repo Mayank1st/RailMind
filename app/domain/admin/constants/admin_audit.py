@@ -21,6 +21,9 @@ class AuditTargetType(str, Enum):
     EMAIL = "EMAIL"
     CONFIG = "CONFIG"
     MODEL = "MODEL"
+    TRAIN = "TRAIN"
+    ROUTE = "ROUTE"
+    STATION = "STATION"
 
 
 class AuditAction(str, Enum):
@@ -30,3 +33,18 @@ class AuditAction(str, Enum):
     USER_REACTIVATED = "USER_REACTIVATED"
     USER_KYC_APPROVED = "USER_KYC_APPROVED"
     USER_KYC_REJECTED = "USER_KYC_REJECTED"
+
+    # ─── Master data — Trains ─────────────────────────────────────────────────
+    TRAIN_CREATED = "TRAIN_CREATED"
+    TRAIN_UPDATED = "TRAIN_UPDATED"
+    TRAIN_DELETED = "TRAIN_DELETED"  # soft delete (is_active → false)
+
+    # ─── Master data — Routes ─────────────────────────────────────────────────
+    ROUTE_CREATED = "ROUTE_CREATED"
+    ROUTE_UPDATED = "ROUTE_UPDATED"
+    ROUTE_DELETED = "ROUTE_DELETED"  # hard delete (no dependents)
+
+    # ─── Master data — Stations ───────────────────────────────────────────────
+    STATION_CREATED = "STATION_CREATED"
+    STATION_UPDATED = "STATION_UPDATED"
+    STATION_DELETED = "STATION_DELETED"  # soft delete (is_active → false)

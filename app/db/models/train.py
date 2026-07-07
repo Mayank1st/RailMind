@@ -37,6 +37,8 @@ class Stations(BaseModel):
     is_remote_location: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, index=True
     )
+    platforms: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    is_operational: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     train_stops = relationship("TrainStations", back_populates="station")
 
@@ -70,7 +72,14 @@ class Trains(BaseModel):
         ForeignKey(f"{DB_SCHEMA}.stations.id", ondelete="RESTRICT"),
         nullable=False,
     )
-
+    distance_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    halts: Mapped[int] = mapped_column(SmallInteger, default=0, nullable=False)
+    # Class codes the train offers, e.g. ["SL", "3A", "2A", "1A"]
+    classes_offered: Mapped[list] = mapped_column(
+        ARRAY(String), default=list, nullable=False
+    )
+    pantry_car: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_paused: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     source_station = relationship("Stations", foreign_keys=[source_station_id])
     destination_station = relationship(
         "Stations", foreign_keys=[destination_station_id]

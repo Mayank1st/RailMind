@@ -9,6 +9,7 @@ from app.db.models.user_oauth_accounts import *
 from app.db.models.booking import *
 from app.db.models.booking_retry_requests import *
 from app.db.models.train import *
+from app.db.models.route import *
 from app.db.models.station_clusters import *
 from app.db.models.passengers import *
 from app.db.models.payment import *
