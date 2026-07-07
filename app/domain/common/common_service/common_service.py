@@ -49,7 +49,7 @@ class CommonService:
 
         if distance_km <= 0:
             raise RailMindException(
-                code="RM-FARE-002",
+                code="RM-FARE-004",
                 message="Invalid distance — from station comes after to station",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )

@@ -36,7 +36,7 @@ class PnrService:
 
         if not booking:
             raise RailMindException(
-                code="RM-BKG-003",
+                code="RM-PNR-001",
                 message="PNR not found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
@@ -96,7 +96,7 @@ class PnrService:
 
         if not booking:
             raise RailMindException(
-                code="RM-BKG-003",
+                code="RM-PNR-001",
                 message="PNR not found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )

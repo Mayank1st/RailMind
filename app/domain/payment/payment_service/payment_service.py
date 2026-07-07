@@ -50,7 +50,7 @@ class PaymentService:
 
         if str(booking.user_id) != str(user_id):
             raise RailMindException(
-                code="RM-AUTH-005",
+                code="RM-PAY-010",
                 message="Booking does not belong to current user",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
@@ -169,7 +169,7 @@ class PaymentService:
 
         if str(booking.user_id) != str(current_user.get("sub")):
             raise RailMindException(
-                code="RM-AUTH-005",
+                code="RM-PAY-010",
                 message="Payment does not belong to current user",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
@@ -250,7 +250,7 @@ class PaymentService:
 
         if str(booking.user_id) != str(current_user.get("sub")):
             raise RailMindException(
-                code="RM-AUTH-005",
+                code="RM-PAY-010",
                 message="Payment does not belong to current user",
                 status_code=status.HTTP_403_FORBIDDEN,
             )

@@ -2,6 +2,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 from app.config import settings
+from app.domain.admin.constants.admin_dashboard import OCCUPANCY_ROLLUP_REFRESH_MINUTES
 from app.domain.booking.constants.chart_preparation import CHART_CHECK_INTERVAL_MINUTES
 from app.domain.trending.constants.trending import (
     TRENDING_RUN_DAY_OF_WEEK,
@@ -61,6 +62,10 @@ celery_app.conf.beat_schedule = {
             day_of_week=TRENDING_RUN_DAY_OF_WEEK,
         ),  # Sunday 23:59 IST
     },
+    "refresh-daily-seat-occupancy": {
+        "task": "dashboard_tasks.task_refresh_daily_occupancy",
+        "schedule": crontab(minute=f"*/{OCCUPANCY_ROLLUP_REFRESH_MINUTES}"),
+    },
 }
 
 
@@ -75,6 +80,11 @@ def _register_task_modules() -> None:
     import app.tasks.search_history_tasks  # noqa: F401  # naming: ignore
     import app.tasks.chart_preparation_tasks  # noqa: F401  # naming: ignore
     import app.tasks.trending_tasks  # noqa: F401  # naming: ignore
+    import app.tasks.dashboard_tasks  # noqa: F401  # naming: ignore
+
+    # Connects task_prerun/task_postrun hooks that record beat-job runs into
+    # job_runs (admin Job/Cron Logs). Imported last so beat_schedule is set.
+    import app.tasks.job_run_signals  # noqa: F401  # naming: ignore
 
 
 _register_task_modules()

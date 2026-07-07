@@ -5,6 +5,11 @@ from io import BytesIO
 from starlette.datastructures import Headers, UploadFile
 
 from app.db.session import async_session_local
+from app.domain.admin.constants.admin_logs import (
+    EmailCategory,
+    EmailTemplateKey,
+    LinkedEntityType,
+)
 from app.domain.booking.booking_service.booking_service import BookingService
 from app.domain.booking.booking_service.ticket_pdf import build_ticket_pdf
 from app.integrations.email import load_template, send_email
@@ -34,7 +39,17 @@ def send_otp_email_impl(user_name: str, email: str) -> int:
     new_loop = asyncio.new_event_loop()
     try:
         new_loop.run_until_complete(
-            send_email(to=email, subject="Your RailMind OTP Code", body=body)
+            send_email(
+                to=email,
+                subject="Your RailMind OTP Code",
+                body=body,
+                template=EmailTemplateKey.OTP_VERIFY.value,
+                category=EmailCategory.OTP.value,
+                # context deliberately excludes the OTP code (never persist it).
+                context={"channel": "email", "validity_minutes": 10},
+                linked_type=LinkedEntityType.USER.value,
+                linked_label=user_name,
+            )
         )
     finally:
         new_loop.close()
@@ -150,6 +165,19 @@ async def _async_send_booking_confirmation(booking_id: str) -> None:
             subject=f"Your RailMind ticket · PNR {ticket_payload['pnr_number']}",
             body=body,
             attachments=[attachment],
+            template=EmailTemplateKey.BOOKING_CONFIRMED.value,
+            category=EmailCategory.BOOKING_CONFIRMATION.value,
+            context={
+                "pnr": ticket_payload["pnr_number"],
+                "passenger": user_name,
+                "train": f"{ticket_payload['train_number']} {ticket_payload['train_name']}",
+                "fare": fare["total_fare"],
+                "channel": "email",
+            },
+            linked_type=LinkedEntityType.PNR.value,
+            linked_label=ticket_payload["pnr_number"],
+            user_id=str(booking.user_id),
+            booking_id=str(booking.id),
         )
 
 

@@ -3,6 +3,12 @@ from pathlib import Path
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema
 
 from app.config import settings
+from app.domain.admin.constants.admin_logs import EmailCategory
+from app.integrations.email_log_writer import (
+    mark_email_failed,
+    mark_email_sent,
+    record_email_queued,
+)
 from app.utils.logger import logger
 
 TEMPLATES_DIR = Path(__file__).parent / "email_templates"
@@ -29,7 +35,18 @@ conf = ConnectionConfig(
 
 
 async def send_email(
-    to: str, subject: str, body: str, attachments: list | None = None
+    to: str,
+    subject: str,
+    body: str,
+    attachments: list | None = None,
+    *,
+    template: str | None = None,
+    category: str = EmailCategory.OTHER.value,
+    context: dict | None = None,
+    linked_type: str | None = None,
+    linked_label: str | None = None,
+    user_id: str | None = None,
+    booking_id: str | None = None,
 ) -> None:
     logger.info(
         "Email send start: to=%s subject=%r via %s:%s",
@@ -37,6 +54,18 @@ async def send_email(
         subject,
         settings.EMAIL_SMTP_HOST,
         settings.MAIL_PORT,
+    )
+    # Persist the attempt (QUEUED) before sending — best-effort, never blocks.
+    log_id = await record_email_queued(
+        to_email=to,
+        subject=subject,
+        template=template,
+        category=category,
+        context=context,
+        linked_type=linked_type,
+        linked_label=linked_label,
+        user_id=user_id,
+        booking_id=booking_id,
     )
     attachments = list(attachments or [])
     # Embed the RailMind logo inline (cid:railmind_logo) so it renders in email
@@ -65,7 +94,9 @@ async def send_email(
     fm = FastMail(conf)
     try:
         await fm.send_message(message)
-    except Exception:
+    except Exception as exc:
         logger.exception("Email send failed: to=%s subject=%r", to, subject)
+        await mark_email_failed(log_id, repr(exc))
         raise
+    await mark_email_sent(log_id)
     logger.info("Email send ok: to=%s subject=%r", to, subject)

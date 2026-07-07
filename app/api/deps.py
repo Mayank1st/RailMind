@@ -90,7 +90,7 @@ async def get_current_user(
     # ── 1. Token missing ──────────────────────────────────────────────────────
     if not access_token:
         raise RailMindException(
-            code="RM-AUTH-001",
+            code="RM-AUTH-019",
             message="Not authenticated. Please login",
             status_code=401,
         )
@@ -151,7 +151,7 @@ async def get_current_user_with_csrf(
     # ── 2. CSRF cookie must exist ─────────────────────────────────────────────
     if not csrf_cookie:
         raise RailMindException(
-            code="RM-AUTH-010",
+            code="RM-AUTH-022",
             message="CSRF token missing",
             status_code=403,
         )
@@ -159,7 +159,7 @@ async def get_current_user_with_csrf(
     # ── 3. CSRF header must exist ─────────────────────────────────────────────
     if not csrf_header:
         raise RailMindException(
-            code="RM-AUTH-010",
+            code="RM-AUTH-022",
             message="X-CSRF-Token header missing",
             status_code=403,
         )
@@ -167,7 +167,7 @@ async def get_current_user_with_csrf(
     # ── 4. Both must match ────────────────────────────────────────────────────
     if csrf_cookie != csrf_header:
         raise RailMindException(
-            code="RM-AUTH-010",
+            code="RM-AUTH-022",
             message="CSRF validation failed",
             status_code=403,
         )

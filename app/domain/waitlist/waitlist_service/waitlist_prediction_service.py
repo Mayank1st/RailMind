@@ -144,7 +144,7 @@ class WaitlistPredictionService:
         booking = (await db.execute(stmt)).scalar_one_or_none()
         if booking is None:
             raise RailMindException(
-                code="RM-BKG-003",
+                code="RM-PNR-001",
                 message="PNR not found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )

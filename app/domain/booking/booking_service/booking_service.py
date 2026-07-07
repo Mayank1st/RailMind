@@ -151,7 +151,7 @@ class BookingService:
 
         if len(passengers_list) != len(payload.passengers):
             raise RailMindException(
-                code="RM-BKG-001",
+                code="RM-BKG-012",
                 message=f"Passengers Not Found, Please Create",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
@@ -307,7 +307,7 @@ class BookingService:
 
         if booking_data is None:
             raise RailMindException(
-                code="RM-BKG-001",
+                code="RM-BKG-012",
                 message="No User List Found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
@@ -345,14 +345,14 @@ class BookingService:
 
         if not booking:
             raise RailMindException(
-                code="RM-BKG-003",
+                code="RM-BKG-006",
                 message="Booking not found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
         if booking.booking_status == BookingStatus.CANCELLED:
             raise RailMindException(
-                code="RM-BKG-004",
+                code="RM-BKG-009",
                 message="Booking is already cancelled",
                 status_code=status.HTTP_409_CONFLICT,
             )
@@ -484,7 +484,7 @@ class BookingService:
 
         if not booking:
             raise RailMindException(
-                code="RM-BKG-003",
+                code="RM-BKG-006",
                 message="Booking not found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
@@ -492,7 +492,7 @@ class BookingService:
         # Receipt me payment + personal data hai — sirf owner dekh sake.
         if str(booking.user_id) != str(current_user_id):
             raise RailMindException(
-                code="RM-AUTH-005",
+                code="RM-BKG-011",
                 message="Booking does not belong to current user",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
@@ -631,7 +631,7 @@ class BookingService:
 
         if not booking:
             raise RailMindException(
-                code="RM-BKG-003",
+                code="RM-BKG-006",
                 message="Booking not found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
@@ -1218,7 +1218,7 @@ class BookingService:
                 return pnr
 
         raise RailMindException(
-            code="RM-BKG-005",
+            code="RM-BKG-010",
             message="Failed to generate unique PNR — please retry",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
