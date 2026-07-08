@@ -5,11 +5,25 @@ from fastapi_pagination import Params
 from fastapi_pagination.bases import AbstractPage
 from fastapi_pagination.ext.sqlalchemy import apaginate
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.pool import NullPool
 
+from app.db.base import DATABASE_URL, DB_SCHEMA
 from app.db.models.admin_audit_log import AdminAuditLogs
 from app.domain.admin.dto.admin_audit_logs_filter_dto import AdminAuditLogFilterDTO
 from app.domain.admin.dto.admin_audit_logs_response_dto import AdminAuditLogResponseDTO
+from app.utils.logger import logger
+
+_event_engine = create_async_engine(
+    DATABASE_URL,
+    poolclass=NullPool,
+    connect_args={"server_settings": {"search_path": f'"{DB_SCHEMA}"'}},
+)
+_event_session = async_sessionmaker(bind=_event_engine, expire_on_commit=False)
 
 
 class AdminAuditService:
@@ -46,6 +60,42 @@ class AdminAuditService:
             )
         )
         await db.flush()
+
+    async def record_event(
+        self,
+        *,
+        actor_id: Optional[str],
+        actor_username: Optional[str],
+        action: str,
+        target_type: str,
+        target_id: Optional[str] = None,
+        before: Optional[dict] = None,
+        after: Optional[dict] = None,
+        reason: Optional[str] = None,
+        ip: Optional[str] = None,
+    ) -> None:
+        """Best-effort audit write on its OWN transaction. Use for events that
+        must persist even when the request rolls back (failed logins) or that
+        aren't tied to a mutating request txn (login/logout). NEVER raises —
+        auditing an auth event must not turn it into a crash."""
+        try:
+            async with _event_session() as db:
+                db.add(
+                    AdminAuditLogs(
+                        actor_user_id=uuid.UUID(actor_id) if actor_id else None,
+                        actor_username=actor_username,
+                        action=action,
+                        target_type=target_type,
+                        target_id=str(target_id) if target_id is not None else None,
+                        before=before,
+                        after=after,
+                        reason=reason,
+                        ip=ip,
+                    )
+                )
+                await db.commit()
+        except Exception:
+            logger.exception("admin_audit: could not record event action=%s", action)
 
     # ── Read (Audit Log screen) ─────────────────────────────────────────────
 
