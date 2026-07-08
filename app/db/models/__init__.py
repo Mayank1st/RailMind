@@ -3,6 +3,10 @@ from app.db.models.admin_mfa import *
 from app.db.models.admin_audit_log import *
 from app.db.models.email_log import *
 from app.db.models.error_log import *
+from app.db.models.fare_rule_version import *
+from app.db.models.festival_window import *
+from app.db.models.rate_limit_config import *
+from app.db.models.quota_allocation import *
 from app.db.models.job_run import *
 from app.db.models.security_question import *
 from app.db.models.user_oauth_accounts import *

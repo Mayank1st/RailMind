@@ -89,6 +89,16 @@ class CommonService:
         cache = await self._load_fare_rules(db)
         return list(cache.values())
 
+    @classmethod
+    def invalidate_fare_rules_cache(cls) -> None:
+        """Drop the in-memory fare-rule cache so the next calc reloads from DB.
+        Called by the admin fare-rules publisher. NOTE: this only busts THIS
+        process's cache — under multiple worker processes (or the Celery worker)
+        each keeps its own; those pick up changes on restart. Fare edits are rare
+        (a few times a year), so this is acceptable; a Redis version-stamp is the
+        follow-up if cross-process immediacy is needed."""
+        cls._fare_rules_cache = None
+
     async def get_all_stations(self, db: AsyncSession) -> list[dict]:
         if self._stations_cache is not None:
             return self._stations_cache
