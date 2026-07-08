@@ -1,0 +1,10 @@
+# ─── Error codes (RM-ADMIN-QUOTA-NNN) ─────────────────────────────────────────
+
+ERR_QUOTA_NOT_FOUND = "RM-ADMIN-QUOTA-001"
+ERR_QUOTA_INVALID_SUM = "RM-ADMIN-QUOTA-002"
+ERR_QUOTA_DUPLICATE = "RM-ADMIN-QUOTA-003"
+ERR_QUOTA_TRAIN_NOT_FOUND = "RM-ADMIN-QUOTA-004"
+ERR_QUOTA_CLASS_NOT_OFFERED = "RM-ADMIN-QUOTA-005"
+
+# The four bucket percentages must add up to exactly this.
+QUOTA_TOTAL_PCT = 100

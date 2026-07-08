@@ -1,10 +1,3 @@
-# Admin audit log — cross-cutting foundation (plan §4.3, north-star #1).
-#
-# Every sensitive admin action writes an admin_audit_logs row in the SAME
-# transaction as the action itself (so an action can never commit without its
-# audit trail). Written via AdminAuditService.record; read by the future Audit
-# Log screen. Actions across the whole panel reuse these action names.
-
 from enum import Enum
 
 ERR_AUDIT_WRITE_FAILED = "RM-ADMIN-AUDIT-001"
@@ -20,6 +13,10 @@ class AuditTargetType(str, Enum):
     JOB = "JOB"
     EMAIL = "EMAIL"
     CONFIG = "CONFIG"
+    FARE = "FARE"
+    HOLIDAY = "HOLIDAY"
+    RATE_LIMIT = "RATE_LIMIT"
+    QUOTA = "QUOTA"
     MODEL = "MODEL"
     TRAIN = "TRAIN"
     ROUTE = "ROUTE"
@@ -33,6 +30,26 @@ class AuditAction(str, Enum):
     USER_REACTIVATED = "USER_REACTIVATED"
     USER_KYC_APPROVED = "USER_KYC_APPROVED"
     USER_KYC_REJECTED = "USER_KYC_REJECTED"
+
+    # ─── Config · Fare rules ──────────────────────────────────────────────────
+    FARE_VERSION_CREATED = "FARE_VERSION_CREATED"
+    FARE_RULE_EDITED = "FARE_RULE_EDITED"
+    FARE_VERSION_PUBLISHED = "FARE_VERSION_PUBLISHED"
+
+    # ─── Config · Holiday calendar ────────────────────────────────────────────
+    HOLIDAY_CREATED = "HOLIDAY_CREATED"
+    HOLIDAY_UPDATED = "HOLIDAY_UPDATED"
+    HOLIDAY_DELETED = "HOLIDAY_DELETED"
+
+    # ─── Config · Rate limits ─────────────────────────────────────────────────
+    RATE_LIMIT_CREATED = "RATE_LIMIT_CREATED"
+    RATE_LIMIT_UPDATED = "RATE_LIMIT_UPDATED"
+    RATE_LIMIT_DELETED = "RATE_LIMIT_DELETED"
+
+    # ─── Config · Quota allocation ────────────────────────────────────────────
+    QUOTA_CREATED = "QUOTA_CREATED"
+    QUOTA_UPDATED = "QUOTA_UPDATED"
+    QUOTA_DELETED = "QUOTA_DELETED"
 
     # ─── Master data — Trains ─────────────────────────────────────────────────
     TRAIN_CREATED = "TRAIN_CREATED"
