@@ -23,6 +23,8 @@ from app.core.totp import (
 )
 from app.db.models.user import Users
 from app.db.models.admin_mfa import AdminMfaSecrets
+from app.domain.admin.admin_service.admin_audit_service import AdminAuditService
+from app.domain.admin.constants.admin_audit import AuditAction, AuditTargetType
 from app.domain.auth.auth_service.auth_service import AuthService
 from app.domain.auth.constants.auth_user import UserRole
 from app.domain.admin.constants.admin_auth import (
@@ -48,6 +50,7 @@ from app.domain.admin.dto.admin_auth_request_dto import AdminLoginRequestDTO
 from app.utils.logger import logger
 
 auth_service = AuthService()
+audit_service = AdminAuditService()
 
 
 class AdminAuthService:
@@ -60,6 +63,7 @@ class AdminAuthService:
         response: Response,
         db: AsyncSession,
         redis: Redis,
+        ip: str | None = None,
     ) -> dict:
         email = payload.email.lower().strip()
 
@@ -72,6 +76,13 @@ class AdminAuthService:
             or user.password is None
             or not verify_encoded_data(payload.password, user.password)
         ):
+            await self._record_login_event(
+                AuditAction.ADMIN_LOGIN_FAILED.value,
+                user_id=str(user.id) if user else None,
+                username=email,
+                ip=ip,
+                reason="invalid_credentials",
+            )
             raise RailMindException(
                 code=ERR_INVALID_CREDENTIALS,
                 message="Invalid email or password.",
@@ -80,6 +91,13 @@ class AdminAuthService:
 
         # ── 2. Role gate — non-admins get the access-denied screen ────────────
         if not has_minimum_role(user.role, UserRole.AGENT):
+            await self._record_login_event(
+                AuditAction.ADMIN_LOGIN_FAILED.value,
+                user_id=str(user.id),
+                username=email,
+                ip=ip,
+                reason="not_admin",
+            )
             raise RailMindException(
                 code=ERR_NOT_ADMIN,
                 message="You don't have access to the admin console.",
@@ -88,6 +106,13 @@ class AdminAuthService:
 
         # ── 3. Account active ─────────────────────────────────────────────────
         if not user.is_active:
+            await self._record_login_event(
+                AuditAction.ADMIN_LOGIN_FAILED.value,
+                user_id=str(user.id),
+                username=email,
+                ip=ip,
+                reason="account_disabled",
+            )
             raise RailMindException(
                 code=ERR_ACCOUNT_DISABLED,
                 message="This account is disabled. Please contact a super-admin.",
@@ -120,6 +145,13 @@ class AdminAuthService:
         # ── 4b. Support-admin (AGENT) → full session immediately ──────────────
         session = await auth_service.issue_session(
             user, response, redis, remember_me=payload.trust_device
+        )
+        await self._record_login_event(
+            AuditAction.ADMIN_LOGIN.value,
+            user_id=str(user.id),
+            username=user.username or email,
+            ip=ip,
+            reason="agent_no_2fa",
         )
         logger.info("Support-admin logged in (no 2FA) user_id=%s", user.id)
         return {"mfa_required": False, **session}
@@ -174,12 +206,20 @@ class AdminAuthService:
         response: Response,
         db: AsyncSession,
         redis: Redis,
+        ip: str | None = None,
     ) -> dict:
         attempt_key = f"{ADMIN_MFA_ATTEMPT_PREFIX}{mfa_user_id}"
 
         # ── 1. Brute-force guard ──────────────────────────────────────────────
         attempts = await redis.get(attempt_key)
         if attempts and int(attempts) >= ADMIN_MFA_MAX_ATTEMPTS:
+            await self._record_login_event(
+                AuditAction.ADMIN_LOGIN_FAILED.value,
+                user_id=mfa_user_id,
+                username=None,
+                ip=ip,
+                reason="mfa_too_many_attempts",
+            )
             raise RailMindException(
                 code=ERR_MFA_TOO_MANY_ATTEMPTS,
                 message="Too many incorrect codes. Please log in again.",
@@ -207,6 +247,13 @@ class AdminAuthService:
         ):
             await redis.incr(attempt_key)
             await redis.expire(attempt_key, ADMIN_MFA_PENDING_TTL_SECONDS)
+            await self._record_login_event(
+                AuditAction.ADMIN_LOGIN_FAILED.value,
+                user_id=str(user.id),
+                username=user.username or user.email,
+                ip=ip,
+                reason="mfa_code_invalid",
+            )
             raise RailMindException(
                 code=ERR_MFA_CODE_INVALID,
                 message="Incorrect code. Please try again.",
@@ -228,6 +275,13 @@ class AdminAuthService:
         )
         self._clear_mfa_pending_cookie(response)
 
+        await self._record_login_event(
+            AuditAction.ADMIN_LOGIN.value,
+            user_id=str(user.id),
+            username=user.username or user.email,
+            ip=ip,
+            reason="2fa",
+        )
         logger.info("Admin 2FA verified, session issued user_id=%s", user.id)
         return {"mfa_required": False, **session}
 
@@ -263,11 +317,44 @@ class AdminAuthService:
         }
 
     async def logout(
-        self, current_user: dict, response: Response, redis: Redis
+        self,
+        current_user: dict,
+        response: Response,
+        redis: Redis,
+        ip: str | None = None,
     ) -> dict:
-        return await auth_service.logout_user(current_user, response, redis)
+        result = await auth_service.logout_user(current_user, response, redis)
+        await self._record_login_event(
+            AuditAction.ADMIN_LOGOUT.value,
+            user_id=current_user.get("sub"),
+            username=current_user.get("username"),
+            ip=ip,
+            reason=None,
+        )
+        return result
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    async def _record_login_event(
+        action: str,
+        *,
+        user_id: str | None,
+        username: str | None,
+        ip: str | None,
+        reason: str | None,
+    ) -> None:
+        """Best-effort auth-event audit row (own txn, never raises). The admin is
+        both actor and target of their own login/logout."""
+        await audit_service.record_event(
+            actor_id=user_id,
+            actor_username=username,
+            action=action,
+            target_type=AuditTargetType.AUTH.value,
+            target_id=user_id,
+            reason=reason,
+            ip=ip,
+        )
 
     async def _get_secret_row(
         self, db: AsyncSession, user_id

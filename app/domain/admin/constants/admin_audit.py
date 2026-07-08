@@ -13,6 +13,7 @@ class AuditTargetType(str, Enum):
     JOB = "JOB"
     EMAIL = "EMAIL"
     CONFIG = "CONFIG"
+    AUTH = "AUTH"
     FARE = "FARE"
     HOLIDAY = "HOLIDAY"
     RATE_LIMIT = "RATE_LIMIT"
@@ -24,6 +25,11 @@ class AuditTargetType(str, Enum):
 
 
 class AuditAction(str, Enum):
+    # ─── Admin console auth (login / logout / failed attempts) ────────────────
+    ADMIN_LOGIN = "ADMIN_LOGIN"
+    ADMIN_LOGOUT = "ADMIN_LOGOUT"
+    ADMIN_LOGIN_FAILED = "ADMIN_LOGIN_FAILED"
+
     # ─── User management ──────────────────────────────────────────────────────
     USER_ROLE_CHANGED = "USER_ROLE_CHANGED"
     USER_DEACTIVATED = "USER_DEACTIVATED"

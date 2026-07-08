@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Cookie, Depends, Response
+from fastapi import APIRouter, Cookie, Depends, Request, Response
 from jose import JWTError
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,13 @@ from app.domain.admin.dto.admin_auth_request_dto import (
 router = APIRouter(tags=["Admin Auth"])
 
 admin_auth_service = AdminAuthService()
+
+
+def _client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else None
 
 
 async def get_mfa_pending_identity(
@@ -50,11 +57,14 @@ async def get_mfa_pending_identity(
 )
 async def admin_login(
     payload: AdminLoginRequestDTO,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
-    data = await admin_auth_service.login(payload, response, db, redis)
+    data = await admin_auth_service.login(
+        payload, response, db, redis, ip=_client_ip(request)
+    )
     message = (
         "Enter your 2-factor code to continue."
         if data.get("mfa_required")
@@ -78,6 +88,7 @@ async def admin_setup_mfa(
 )
 async def admin_verify_mfa(
     payload: AdminMfaVerifyRequestDTO,
+    request: Request,
     response: Response,
     mfa_identity: dict = Depends(get_mfa_pending_identity),
     db: AsyncSession = Depends(get_db),
@@ -90,6 +101,7 @@ async def admin_verify_mfa(
         response=response,
         db=db,
         redis=redis,
+        ip=_client_ip(request),
     )
     return ok(data=data, message="Signed in to the admin console.")
 
@@ -105,9 +117,12 @@ async def admin_me(
 
 @router.post("/logout")
 async def admin_logout(
+    request: Request,
     response: Response,
     current_user: dict = IsAgent,
     redis: Redis = Depends(get_redis),
 ):
-    data = await admin_auth_service.logout(current_user, response, redis)
+    data = await admin_auth_service.logout(
+        current_user, response, redis, ip=_client_ip(request)
+    )
     return ok(data=data, message="Logged out successfully.")
