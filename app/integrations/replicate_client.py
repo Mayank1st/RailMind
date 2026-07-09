@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 import httpx
 
@@ -7,6 +8,12 @@ from functools import lru_cache
 from typing import Any, Optional
 
 from app.config import settings
+from app.core.llm_usage_writer import (
+    STATUS_ERROR,
+    STATUS_OK,
+    STATUS_RATE_LIMITED,
+    log_llm_call_async,
+)
 from app.integrations.replicate_models import REPLICATE_MODELS
 
 logger = logging.getLogger(__name__)
@@ -204,6 +211,26 @@ def _join_output(output: Any) -> str:
 # ─────────────────────────────────────────────
 
 
+def _elapsed_ms(start: float) -> int:
+    return int((time.monotonic() - start) * 1000)
+
+
+def _replicate_tokens(prediction: dict[str, Any]) -> Optional[int]:
+    """Best-effort token count from Replicate's `metrics` (varies by model)."""
+    metrics = prediction.get("metrics") or {}
+    total = 0
+    for key in (
+        "input_token_count",
+        "output_token_count",
+        "total_token_count",
+        "tokens",
+    ):
+        value = metrics.get(key)
+        if isinstance(value, (int, float)):
+            total += int(value)
+    return total or None
+
+
 async def run_replicate_model(model: str, model_input: dict[str, Any]) -> Any:
     """
     Runs any Replicate model with a raw input dict and returns the raw
@@ -217,44 +244,70 @@ async def run_replicate_model(model: str, model_input: dict[str, Any]) -> Any:
         "replicate call | model=%s input=%s", slug, _loggable_input(model_input)
     )
 
+    start = time.monotonic()
     try:
-        async with httpx.AsyncClient(
-            headers=connection.headers, timeout=HTTP_TIMEOUT_SECONDS
-        ) as client:
-            response = await client.post(
-                f"{REPLICATE_API_BASE_URL}/models/{slug}/predictions",
-                json={"input": model_input},
-                headers={"Prefer": f"wait={PREDICTION_WAIT_SECONDS}"},
+        try:
+            async with httpx.AsyncClient(
+                headers=connection.headers, timeout=HTTP_TIMEOUT_SECONDS
+            ) as client:
+                response = await client.post(
+                    f"{REPLICATE_API_BASE_URL}/models/{slug}/predictions",
+                    json={"input": model_input},
+                    headers={"Prefer": f"wait={PREDICTION_WAIT_SECONDS}"},
+                )
+                _raise_for_status(response)
+                prediction = await _wait_for_prediction(client, response.json())
+
+        except httpx.HTTPError as e:
+            logger.exception("Replicate network error: %s", e)
+            raise ReplicateInferenceError(f"Replicate request failed: {e}") from e
+
+        if prediction.get("status") != STATUS_SUCCEEDED:
+            logger.error(
+                "replicate failed | model=%s prediction_id=%s status=%s error=%s",
+                slug,
+                prediction.get("id"),
+                prediction.get("status"),
+                prediction.get("error"),
             )
-            _raise_for_status(response)
-            prediction = await _wait_for_prediction(client, response.json())
+            raise ReplicateInferenceError(
+                f"Prediction {prediction.get('status')}: {prediction.get('error')}"
+            )
 
-    except httpx.HTTPError as e:
-        logger.exception("Replicate network error: %s", e)
-        raise ReplicateInferenceError(f"Replicate request failed: {e}") from e
-
-    if prediction.get("status") != STATUS_SUCCEEDED:
-        logger.error(
-            "replicate failed | model=%s prediction_id=%s status=%s error=%s",
+        output = prediction.get("output")
+        logger.info(
+            "replicate done | model=%s prediction_id=%s status=%s metrics=%s output=%s",
             slug,
             prediction.get("id"),
             prediction.get("status"),
-            prediction.get("error"),
+            prediction.get("metrics"),
+            _loggable_value(output),
         )
-        raise ReplicateInferenceError(
-            f"Prediction {prediction.get('status')}: {prediction.get('error')}"
+        log_llm_call_async(
+            provider="replicate",
+            model=slug,
+            latency_ms=_elapsed_ms(start),
+            status=STATUS_OK,
+            tokens=_replicate_tokens(prediction),
         )
+        return output
 
-    output = prediction.get("output")
-    logger.info(
-        "replicate done | model=%s prediction_id=%s status=%s metrics=%s output=%s",
-        slug,
-        prediction.get("id"),
-        prediction.get("status"),
-        prediction.get("metrics"),
-        _loggable_value(output),
-    )
-    return output
+    except ReplicateRateLimitError:
+        log_llm_call_async(
+            provider="replicate",
+            model=slug,
+            latency_ms=_elapsed_ms(start),
+            status=STATUS_RATE_LIMITED,
+        )
+        raise
+    except Exception:
+        log_llm_call_async(
+            provider="replicate",
+            model=slug,
+            latency_ms=_elapsed_ms(start),
+            status=STATUS_ERROR,
+        )
+        raise
 
 
 # ─────────────────────────────────────────────

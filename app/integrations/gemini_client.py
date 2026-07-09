@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from functools import lru_cache
 from typing import Optional
 
@@ -7,6 +8,12 @@ from google import genai
 from google.genai import types
 
 from app.config import settings
+from app.core.llm_usage_writer import (
+    STATUS_ERROR,
+    STATUS_OK,
+    STATUS_RATE_LIMITED,
+    log_llm_call_async,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +102,7 @@ async def use_gemini_25_flash(
         system_instruction=system_instruction,  # new SDK supports this natively
     )
 
+    start = time.monotonic()
     try:
         response = await asyncio.get_event_loop().run_in_executor(
             None,
@@ -105,21 +113,40 @@ async def use_gemini_25_flash(
             ),
         )
 
-        logger.debug(
-            "gemini-2.5-flash ok | tokens=%s",
-            getattr(response.usage_metadata, "total_token_count", "N/A"),
+        latency_ms = int((time.monotonic() - start) * 1000)
+        tokens = getattr(response.usage_metadata, "total_token_count", None)
+        log_llm_call_async(
+            provider="gemini",
+            model=model_name,
+            latency_ms=latency_ms,
+            status=STATUS_OK,
+            tokens=tokens,
         )
+        logger.debug("gemini-2.5-flash ok | tokens=%s", tokens)
         return response.text
 
     except Exception as e:
+        latency_ms = int((time.monotonic() - start) * 1000)
         error_str = str(e).lower()
 
         if "quota" in error_str or "429" in error_str or "rate" in error_str:
+            log_llm_call_async(
+                provider="gemini",
+                model=model_name,
+                latency_ms=latency_ms,
+                status=STATUS_RATE_LIMITED,
+            )
             logger.warning("Gemini rate limit: %s", e)
             raise GeminiRateLimitError(
                 "Gemini quota exhausted. Retry after a moment."
             ) from e
 
+        log_llm_call_async(
+            provider="gemini",
+            model=model_name,
+            latency_ms=latency_ms,
+            status=STATUS_ERROR,
+        )
         if "invalid" in error_str or "400" in error_str:
             logger.error("Gemini invalid request: %s", e)
             raise GeminiInvalidRequestError(str(e)) from e

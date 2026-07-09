@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.advisor_flags import AdvisorState
 from app.core.exceptions import RailMindException
 from app.db.models.booking import Bookings, BookingPassengers
 from app.db.models.waiting_list import WaitlistEntries
@@ -52,7 +53,13 @@ class WaitlistPredictionService:
         self._alternatives = WaitlistAlternativesService()
 
     async def predict(
-        self, *, pnr: str, db: AsyncSession, current_user_id: str, explain: bool = False
+        self,
+        *,
+        pnr: str,
+        db: AsyncSession,
+        current_user_id: str,
+        explain: bool = False,
+        advisor_state: str = AdvisorState.ON.value,
     ) -> dict:
         booking = await self._fetch_owned_booking(db, pnr, current_user_id)
 
@@ -67,10 +74,15 @@ class WaitlistPredictionService:
 
         days_to_journey = max((booking.journey_date - date.today()).days, 0)
 
-        # Route to L2 when the model artifact is present; else L1. Either failing
-        # degrades to a safe pessimistic default — the endpoint never blocks.
+        # Admin toggle: OFF -> skip prediction entirely (disabled response).
+        if advisor_state == AdvisorState.OFF.value:
+            return self._degraded_result(wl_entry, days_to_journey)
+
         try:
-            if self._model.is_available():
+            if (
+                advisor_state != AdvisorState.FORCE_RULES.value
+                and self._model.is_available()
+            ):
                 result = await self._model.predict(
                     db,
                     wl_type=wl_entry.wl_type,

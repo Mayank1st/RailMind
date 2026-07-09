@@ -7,6 +7,11 @@ from app.db.models.fare_rule_version import *
 from app.db.models.festival_window import *
 from app.db.models.rate_limit_config import *
 from app.db.models.quota_allocation import *
+from app.db.models.advisor_toggle import *
+from app.db.models.model_version import *
+from app.db.models.retrain_candidate import *
+from app.db.models.ai_prediction_log import *
+from app.db.models.llm_usage_log import *
 from app.db.models.job_run import *
 from app.db.models.security_question import *
 from app.db.models.user_oauth_accounts import *
