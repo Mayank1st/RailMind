@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, get_redis, rate_limit
 from app.config import settings
+from app.core.advisor_flags import AdvisorKey, AdvisorState, get_advisor_state
+from app.core.prediction_log_writer import log_prediction_async
 from app.core.response import ok
 from app.domain.auth.constants.auth_user import CACHE_TTL_SEAT_AVAILABILITY
 from app.domain.fare.constants.fare_advisor import (
@@ -45,17 +47,18 @@ fare_advisor_model_service = FareAdvisorModelService()
 fare_advisor_reason_service = FareAdvisorReasonService()
 
 
-def _service():
-    """Route to L2 when the model artifact is present, else L1 rules."""
-    if fare_advisor_model_service.is_available():
+def _service(force_rules: bool):
+    """Route to L2 (model) when allowed by the toggle AND the artifact is present;
+    otherwise L1 rules. `force_rules` is the admin FORCE_RULES state."""
+    if not force_rules and fare_advisor_model_service.is_available():
         return fare_advisor_model_service
     return fare_advisor_rules_service
 
 
 def _cache_key(
-    train_number: str, train_class: str, quota: str, journey_date: date
+    train_number: str, train_class: str, quota: str, journey_date: date, state: str
 ) -> str:
-    return f"fareadv:{train_number}:{train_class}:{quota}:{journey_date}"
+    return f"fareadv:{train_number}:{train_class}:{quota}:{journey_date}:{state}"
 
 
 async def _cache_get(redis: Redis, key: str) -> dict | None:
@@ -89,30 +92,54 @@ async def get_fare_advisor(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
-    key = _cache_key(train_number, train_class, quota, journey_date)
+    # Admin toggle (Redis-cached, ON fallback). OFF → skip compute entirely.
+    state = await get_advisor_state(redis, AdvisorKey.FARE.value)
+    advisor_enabled = state != AdvisorState.OFF.value
     cached = False
-    data = await _cache_get(redis, key)
-    if data is not None:
-        cached = True
-    else:
-        try:
-            data = await _service().advise(
-                db=db,
-                train_number=train_number,
-                train_class=train_class,
-                quota=quota,
-                journey_date=journey_date,
-            )
-            await _cache_set(redis, key, data)
-        except Exception:
-            # Advisor must never block the booking flow — degrade to a safe default.
-            logger.exception("%s fare advisor failed", ERROR_CODE_ADVISOR)
-            await db.rollback()
-            data = _safe_default(journey_date)
 
-    # L3 — layer the Gemini nudge on top of the (cached or fresh) decision.
-    if explain:
+    if not advisor_enabled:
+        data = _safe_default(journey_date)
+    else:
+        force_rules = state == AdvisorState.FORCE_RULES.value
+        key = _cache_key(train_number, train_class, quota, journey_date, state)
+        data = await _cache_get(redis, key)
+        if data is not None:
+            cached = True
+        else:
+            try:
+                data = await _service(force_rules).advise(
+                    db=db,
+                    train_number=train_number,
+                    train_class=train_class,
+                    quota=quota,
+                    journey_date=journey_date,
+                )
+                await _cache_set(redis, key, data)
+            except Exception:
+                # Advisor must never block the booking flow — degrade to a safe default.
+                logger.exception("%s fare advisor failed", ERROR_CODE_ADVISOR)
+                await db.rollback()
+                data = _safe_default(journey_date)
+
+    # L3 — layer the Gemini nudge on top (skip when the advisor is off).
+    if explain and advisor_enabled:
         data["reason"] = await fare_advisor_reason_service.generate_reason(data)
+
+    # Prediction telemetry (best-effort, non-blocking) — only real predictions.
+    if advisor_enabled:
+        days_out = (journey_date - date.today()).days
+        log_prediction_async(
+            advisor=AdvisorKey.FARE.value,
+            input_summary=f"{source_station_code}→{destination_station_code} · {days_out}d out",
+            predicted_label=str(data.get("decision") or ""),
+            predicted_confidence=data.get("confidence"),
+            subject_ref=f"{train_number}:{journey_date}:{train_class}:{quota}",
+            user_id=current_user.get("sub"),
+            predicted_raw={
+                "decision": data.get("decision"),
+                "source": data.get("source"),
+            },
+        )
 
     return ok(
         data=FareAdvisorResponseDTO.model_validate(data),
@@ -120,6 +147,7 @@ async def get_fare_advisor(
         meta={
             "confidence_threshold": settings.AI_CONFIDENCE_THRESHOLD,
             "cached": cached,
+            "advisor_enabled": advisor_enabled,
         },
     )
 
@@ -136,6 +164,20 @@ async def get_fare_advisor_batch(
 ):
     # Badge-only (no Gemini): one call for a whole search list. Cache-first per
     # journey; compute only the misses in a single batched DB + model pass.
+    state = await get_advisor_state(redis, AdvisorKey.FARE.value)
+    if state == AdvisorState.OFF.value:
+        results = [_safe_default(item.journey_date) for item in items]
+        return ok(
+            data=[FareAdvisorResponseDTO.model_validate(r) for r in results],
+            message="Fare advice generated successfully.",
+            meta={
+                "confidence_threshold": settings.AI_CONFIDENCE_THRESHOLD,
+                "count": len(results),
+                "advisor_enabled": False,
+            },
+        )
+
+    force_rules = state == AdvisorState.FORCE_RULES.value
     results: list[dict | None] = [None] * len(items)
     to_compute: list[FareAdvisorBatchItemDTO] = []
     miss_idx: list[int] = []
@@ -143,7 +185,11 @@ async def get_fare_advisor_batch(
         data = await _cache_get(
             redis,
             _cache_key(
-                item.train_number, item.train_class, item.quota, item.journey_date
+                item.train_number,
+                item.train_class,
+                item.quota,
+                item.journey_date,
+                state,
             ),
         )
         if data is not None:
@@ -155,7 +201,7 @@ async def get_fare_advisor_batch(
     if to_compute:
         cacheable = True
         try:
-            computed = await _service().advise_batch(
+            computed = await _service(force_rules).advise_batch(
                 db, [item.model_dump() for item in to_compute]
             )
         except Exception:
@@ -174,6 +220,7 @@ async def get_fare_advisor_batch(
                         item.train_class,
                         item.quota,
                         item.journey_date,
+                        state,
                     ),
                     computed[k],
                 )
@@ -184,6 +231,7 @@ async def get_fare_advisor_batch(
         meta={
             "confidence_threshold": settings.AI_CONFIDENCE_THRESHOLD,
             "count": len(results),
+            "advisor_enabled": True,
         },
     )
 

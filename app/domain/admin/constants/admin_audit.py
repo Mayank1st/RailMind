@@ -18,6 +18,7 @@ class AuditTargetType(str, Enum):
     HOLIDAY = "HOLIDAY"
     RATE_LIMIT = "RATE_LIMIT"
     QUOTA = "QUOTA"
+    ADVISOR = "ADVISOR"
     MODEL = "MODEL"
     TRAIN = "TRAIN"
     ROUTE = "ROUTE"
@@ -56,6 +57,18 @@ class AuditAction(str, Enum):
     QUOTA_CREATED = "QUOTA_CREATED"
     QUOTA_UPDATED = "QUOTA_UPDATED"
     QUOTA_DELETED = "QUOTA_DELETED"
+
+    # ─── AI Control · Advisor toggles ─────────────────────────────────────────
+    ADVISOR_STATE_CHANGED = "ADVISOR_STATE_CHANGED"
+
+    # ─── AI Control · Model versions ──────────────────────────────────────────
+    MODEL_VERSION_ACTIVATED = "MODEL_VERSION_ACTIVATED"
+    MODEL_FALLBACK_FORCED = "MODEL_FALLBACK_FORCED"
+
+    # ─── AI Control · Retrain ─────────────────────────────────────────────────
+    RETRAIN_TRIGGERED = "RETRAIN_TRIGGERED"
+    MODEL_PROMOTED = "MODEL_PROMOTED"
+    RETRAIN_REJECTED = "RETRAIN_REJECTED"
 
     # ─── Master data — Trains ─────────────────────────────────────────────────
     TRAIN_CREATED = "TRAIN_CREATED"
