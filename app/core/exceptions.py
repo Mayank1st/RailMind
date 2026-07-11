@@ -105,6 +105,15 @@ class WaitlistFullError(RailMindException):
     message = "Waitlist is full for this train/class"
 
 
+# ─────────────────────────── NOTIFICATION ───────────────────────────
+
+
+class WhatsAppDeliveryError(RailMindException):
+    error_code = "RM-NOTIF-001"
+    status_code = 503
+    message = "WhatsApp message delivery failed"
+
+
 # ─────────────────────────── RATE LIMIT ───────────────────────────
 
 

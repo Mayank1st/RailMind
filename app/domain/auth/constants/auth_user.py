@@ -13,6 +13,15 @@ CACHE_TTL_SEAT_AVAILABILITY = 60  # 1 min   — high churn during booking window
 CACHE_TTL_FARE = 300  # 5 mins
 CACHE_TTL_AI_PREDICTION = 900  # 15 mins
 
+# ─── Phone ────────────────────────────────────────────────────────────────────
+
+INDIA_MOBILE_E164_PREFIX = "+91"  # stored mobile numbers are 10-digit Indian
+
+# ─── WhatsApp OTP ─────────────────────────────────────────────────────────────
+
+OTP_WHATSAPP_TTL_SECONDS = 300
+OTP_WHATSAPP_VALIDITY_MINUTES = OTP_WHATSAPP_TTL_SECONDS // 60
+
 
 class KycStatus(str, Enum):
     PASSED = "PASSED"

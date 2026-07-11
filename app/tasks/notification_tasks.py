@@ -10,9 +10,14 @@ from app.domain.admin.constants.admin_logs import (
     EmailTemplateKey,
     LinkedEntityType,
 )
+from app.domain.auth.constants.auth_user import (
+    INDIA_MOBILE_E164_PREFIX,
+    OTP_WHATSAPP_VALIDITY_MINUTES,
+)
 from app.domain.booking.booking_service.booking_service import BookingService
 from app.domain.booking.booking_service.ticket_pdf import build_ticket_pdf
 from app.integrations.email import load_template, send_email
+from app.integrations.whatsapp_client import whatsapp_client
 from app.tasks.celery_app import celery_app
 from app.tasks.worker_loop import run_in_worker_loop as _run_in_worker_loop
 from app.utils.logger import logger
@@ -79,6 +84,46 @@ def task_send_otp_email(self, user_name: str, email: str) -> int:
         "Celery task task_send_otp_email done task_id=%s to=%s",
         self.request.id,
         email,
+    )
+    return otp
+
+
+def send_otp_whatsapp_impl(mobile_number: str) -> int:
+    """Generate an OTP and deliver it over WhatsApp (sync — Twilio SDK).
+
+    `mobile_number` is the stored 10-digit Indian number; converted to E.164 here.
+    """
+    logger.info("OTP WhatsApp flow: preparing message to=%s", mobile_number)
+    otp = generate_six_digit_otp()
+    whatsapp_client.send_otp(
+        to_phone=f"{INDIA_MOBILE_E164_PREFIX}{mobile_number}",
+        otp_code=str(otp),
+        validity_minutes=OTP_WHATSAPP_VALIDITY_MINUTES,
+    )
+    logger.info("OTP WhatsApp flow: finished for to=%s", mobile_number)
+    return otp
+
+
+@celery_app.task(name="task_send_otp_whatsapp", bind=True)
+def task_send_otp_whatsapp(self, mobile_number: str) -> int:
+    logger.info(
+        "Celery task task_send_otp_whatsapp started task_id=%s to=%s",
+        self.request.id,
+        mobile_number,
+    )
+    try:
+        otp = send_otp_whatsapp_impl(mobile_number)
+    except Exception:
+        logger.exception(
+            "Celery task task_send_otp_whatsapp failed task_id=%s to=%s",
+            self.request.id,
+            mobile_number,
+        )
+        raise
+    logger.info(
+        "Celery task task_send_otp_whatsapp done task_id=%s to=%s",
+        self.request.id,
+        mobile_number,
     )
     return otp
 
