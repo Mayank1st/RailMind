@@ -148,6 +148,7 @@ virtualenv==21.2.1
 watchfiles==1.1.1
 wcwidth==0.6.0
 websockets==15.0.1
-xgboost==3.3.0
+xgboost==3.3.0; sys_platform != "linux"
+xgboost-cpu==3.3.0; sys_platform == "linux"
 yarl==1.23.0
 zstandard==0.25.0
