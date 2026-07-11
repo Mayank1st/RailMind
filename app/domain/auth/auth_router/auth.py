@@ -10,11 +10,16 @@ from app.domain.auth.dto.auth_request_dto import (
     ResetPasswordDTO,
     VerifyOtpDTO,
     UpdateUserProfileDTO,
+    WhatsappOtpLoginRequestDTO,
+    WhatsappOtpSendRequestDTO,
 )
 from app.domain.auth.auth_service.auth_service import AuthService
 from app.domain.auth.auth_service.google_auth_service import GoogleAuthService
 from app.core.response import created, ok
-from app.domain.auth.constants.auth_user import REFRESH_TOKEN_COOKIE_NAME
+from app.domain.auth.constants.auth_user import (
+    OTP_WHATSAPP_VALIDITY_MINUTES,
+    REFRESH_TOKEN_COOKIE_NAME,
+)
 from app.core.exceptions import RailMindException
 from app.domain.auth.dto.google_auth_request_dto import GoogleAuthRequestDTO
 
@@ -69,6 +74,36 @@ async def google_auth(
         else "Logged in via Google."
     )
     return ok(data=auth_result, message=message)
+
+
+@router.post(
+    "/login/whatsapp/send-otp",
+    dependencies=[Depends(rate_limit(limit=10, scope="auth_whatsapp_otp_send"))],
+)
+async def send_whatsapp_login_otp(
+    payload: WhatsappOtpSendRequestDTO,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    data = await auth_service.send_whatsapp_login_otp(payload.mobile_number, db, redis)
+    return created(
+        data=data,
+        message=f"OTP sent on WhatsApp. Valid for {OTP_WHATSAPP_VALIDITY_MINUTES} minutes.",
+    )
+
+
+@router.post(
+    "/login/whatsapp/verify-otp",
+    dependencies=[Depends(rate_limit(limit=10, scope="auth_whatsapp_otp_login"))],
+)
+async def login_with_whatsapp_otp(
+    payload: WhatsappOtpLoginRequestDTO,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    data = await auth_service.login_with_whatsapp_otp(payload, response, db, redis)
+    return ok(data=data, message="Logged in successfully via WhatsApp OTP.")
 
 
 @router.post(

@@ -23,6 +23,7 @@ from app.domain.auth.dto.auth_request_dto import (
     ContactDetailsDTO,
     LoginRequestDTO,
     ResetPasswordDTO,
+    WhatsappOtpLoginRequestDTO,
 )
 from app.core.security import (
     COMMON_PASSWORD_SET,
@@ -37,10 +38,11 @@ from app.integrations.supabase_client import (
 )
 from app.core.exceptions import RailMindException
 from app.core.exceptions import ProviderMismatchError
-from app.tasks.notification_tasks import send_otp_email_impl
+from app.tasks.notification_tasks import send_otp_email_impl, send_otp_whatsapp_impl
 from app.utils.logger import logger
 from app.domain.auth.constants.auth_user import (
     UserRole,
+    OTP_WHATSAPP_TTL_SECONDS,
     ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
     CSRF_TOKEN_COOKIE_NAME,
@@ -64,6 +66,8 @@ OTP_MAX_ATTEMPTS = 3
 OTP_TTL_SECONDS = 600
 OTP_REDIS_PREFIX = "otp:"
 OTP_ATTEMPT_PREFIX = "otp_attempts:"
+OTP_WHATSAPP_REDIS_PREFIX = "otp_wa:"
+OTP_WHATSAPP_ATTEMPT_PREFIX = "otp_wa_attempts:"
 
 
 class AuthService:
@@ -414,6 +418,158 @@ class AuthService:
         logger.info("Email verified successfully for email=%s", email)
 
         return {"email": email}
+
+    async def send_whatsapp_login_otp(
+        self,
+        mobile_number: str,
+        db: AsyncSession,
+        redis: Redis,
+    ) -> dict:
+
+        mobile_number = mobile_number.strip()
+
+        # ── 1. Find user by registered mobile ────────────────────────────────
+        result = await db.execute(
+            select(UserContacts)
+            .options(joinedload(UserContacts.user))
+            .where(UserContacts.mobile_number == mobile_number)
+        )
+        contact = result.scalar_one_or_none()
+
+        if not contact or not contact.user:
+            raise RailMindException(
+                code="RM-AUTH-004",
+                message="Mobile number not registered. Please register",
+                status_code=404,
+            )
+
+        # ── 2. Prevent OTP spam ───────────────────────────────────────────────
+        existing_otp = await redis.get(f"{OTP_WHATSAPP_REDIS_PREFIX}{mobile_number}")
+        if existing_otp:
+            ttl = await redis.ttl(f"{OTP_WHATSAPP_REDIS_PREFIX}{mobile_number}")
+            raise RailMindException(
+                code="RM-AUTH-011",
+                message=f"OTP already sent. Please wait {ttl} seconds before requesting again",
+                status_code=429,
+            )
+
+        # ── 3. Send OTP over WhatsApp (sync Twilio SDK → thread executor) ─────
+        try:
+            loop = asyncio.get_event_loop()
+            otp = await loop.run_in_executor(
+                None,
+                send_otp_whatsapp_impl,
+                mobile_number,
+            )
+            logger.info("OTP WhatsApp sent successfully to=%s", mobile_number)
+        except Exception:
+            logger.exception("OTP WhatsApp send failed for mobile=%s", mobile_number)
+            raise RailMindException(
+                code="RM-AUTH-012",
+                message="Failed to send OTP. Please try again",
+                status_code=500,
+            )
+
+        # ── 4. Save OTP in Redis ──────────────────────────────────────────────
+        await redis.setex(
+            f"{OTP_WHATSAPP_REDIS_PREFIX}{mobile_number}",
+            OTP_WHATSAPP_TTL_SECONDS,
+            str(otp),
+        )
+        await redis.delete(f"{OTP_WHATSAPP_ATTEMPT_PREFIX}{mobile_number}")
+        logger.info(
+            "WhatsApp OTP saved in Redis for mobile=%s ttl=%ss",
+            mobile_number,
+            OTP_WHATSAPP_TTL_SECONDS,
+        )
+
+        return {"mobile_number": mobile_number}
+
+    async def login_with_whatsapp_otp(
+        self,
+        payload: WhatsappOtpLoginRequestDTO,
+        response: Response,
+        db: AsyncSession,
+        redis: Redis,
+    ) -> dict:
+
+        mobile_number = payload.mobile_number.strip()
+
+        # ── 1. Check brute force ──────────────────────────────────────────────
+        attempts = await redis.get(f"{OTP_WHATSAPP_ATTEMPT_PREFIX}{mobile_number}")
+        if attempts and int(attempts) >= OTP_MAX_ATTEMPTS:
+            raise RailMindException(
+                code="RM-AUTH-013",
+                message="Too many incorrect attempts. Please request a new OTP",
+                status_code=429,
+            )
+
+        # ── 2. Get stored OTP ─────────────────────────────────────────────────
+        stored_otp = await redis.get(f"{OTP_WHATSAPP_REDIS_PREFIX}{mobile_number}")
+        if not stored_otp:
+            raise RailMindException(
+                code="RM-AUTH-014",
+                message="OTP expired or not found. Please request a new one",
+                status_code=400,
+            )
+
+        # ── 3. Match OTP ──────────────────────────────────────────────────────
+        if payload.otp != stored_otp:
+            await redis.incr(f"{OTP_WHATSAPP_ATTEMPT_PREFIX}{mobile_number}")
+            await redis.expire(
+                f"{OTP_WHATSAPP_ATTEMPT_PREFIX}{mobile_number}",
+                OTP_WHATSAPP_TTL_SECONDS,
+            )
+            current_attempts = int(
+                await redis.get(f"{OTP_WHATSAPP_ATTEMPT_PREFIX}{mobile_number}") or 1
+            )
+            remaining = OTP_MAX_ATTEMPTS - current_attempts
+            raise RailMindException(
+                code="RM-AUTH-015",
+                message=f"Incorrect OTP. {remaining} attempts remaining",
+                status_code=400,
+            )
+
+        # ── 4. Fetch user ─────────────────────────────────────────────────────
+        result = await db.execute(
+            select(UserContacts)
+            .options(joinedload(UserContacts.user))
+            .where(UserContacts.mobile_number == mobile_number)
+        )
+        contact = result.scalar_one_or_none()
+
+        if not contact or not contact.user:
+            raise RailMindException(
+                code="RM-AUTH-004",
+                message="User not found",
+                status_code=404,
+            )
+
+        user = contact.user
+
+        # ── 5. Account activation gate — same as password login ──────────────
+        # WhatsApp OTP login unverified account ka bypass NAHI banna chahiye
+        if not user.is_email_verified:
+            raise RailMindException(
+                code="RM-AUTH-020",
+                message="Email is not verified. Please verify your email first",
+                status_code=403,
+            )
+
+        # ── 6. Mark mobile verified (possession proven via OTP) ──────────────
+        user.is_mobile_verified = True
+        await db.flush()
+
+        # ── 7. Clean up Redis ─────────────────────────────────────────────────
+        await redis.delete(f"{OTP_WHATSAPP_REDIS_PREFIX}{mobile_number}")
+        await redis.delete(f"{OTP_WHATSAPP_ATTEMPT_PREFIX}{mobile_number}")
+
+        logger.info("WhatsApp OTP login successful for mobile=%s", mobile_number)
+
+        # ── 8. Issue session (tokens + Redis + cookies) ───────────────────────
+        return await self.issue_session(
+            user, response, redis, remember_me=payload.remember_me
+        )
 
     async def refresh_user_token(
         self,

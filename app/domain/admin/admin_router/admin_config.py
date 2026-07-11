@@ -9,6 +9,9 @@ from app.core.permissions import IsAdmin, IsAgent
 from app.core.response import ok
 from app.domain.admin.admin_service.admin_fare_service import AdminFareService
 from app.domain.admin.admin_service.admin_holidays_service import AdminHolidaysService
+from app.domain.admin.admin_service.admin_notification_templates_service import (
+    AdminNotificationTemplatesService,
+)
 from app.domain.admin.admin_service.admin_quota_service import AdminQuotaService
 from app.domain.admin.admin_service.admin_rate_limits_service import (
     AdminRateLimitsService,
@@ -22,6 +25,11 @@ from app.domain.admin.dto.admin_fare_request_dto import (
 from app.domain.admin.dto.admin_holidays_request_dto import (
     CreateHolidayRequestDTO,
     UpdateHolidayRequestDTO,
+)
+from app.domain.admin.dto.admin_notification_templates_request_dto import (
+    CreateNotificationTemplateRequestDTO,
+    PreviewNotificationTemplateRequestDTO,
+    UpdateNotificationTemplateRequestDTO,
 )
 from app.domain.admin.dto.admin_quota_request_dto import (
     CreateQuotaRequestDTO,
@@ -38,6 +46,7 @@ admin_fare_service = AdminFareService()
 admin_holidays_service = AdminHolidaysService()
 admin_rate_limits_service = AdminRateLimitsService()
 admin_quota_service = AdminQuotaService()
+admin_notification_templates_service = AdminNotificationTemplatesService()
 
 
 def _client_ip(request: Request) -> str | None:
@@ -305,3 +314,64 @@ async def delete_admin_quota_allocation(
         quota_id, current_user, _client_ip(request), db
     )
     return ok(data=data, message="Quota allocation removed successfully.")
+
+
+# ── Notification templates ────────────────────────────────────────────────────
+
+
+@router.get("/config/notification-templates")
+async def list_admin_notification_templates(
+    current_user: dict = IsAgent,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await admin_notification_templates_service.list_templates(db)
+    return ok(data=data, message="Notification templates fetched successfully.")
+
+
+@router.post("/config/notification-templates/preview")
+async def preview_admin_notification_template(
+    payload: PreviewNotificationTemplateRequestDTO,
+    current_user: dict = IsAgent,
+):
+    data = admin_notification_templates_service.preview(payload)
+    return ok(data=data, message="Template preview rendered.")
+
+
+@router.post("/config/notification-templates")
+async def create_admin_notification_template(
+    payload: CreateNotificationTemplateRequestDTO,
+    request: Request,
+    current_user: dict = IsAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await admin_notification_templates_service.create_template(
+        payload, current_user, _client_ip(request), db
+    )
+    return ok(data=data, message="Notification template created.")
+
+
+@router.patch("/config/notification-templates/{template_id}")
+async def update_admin_notification_template(
+    template_id: uuid.UUID,
+    payload: UpdateNotificationTemplateRequestDTO,
+    request: Request,
+    current_user: dict = IsAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await admin_notification_templates_service.update_template(
+        template_id, payload, current_user, _client_ip(request), db
+    )
+    return ok(data=data, message="Notification template updated.")
+
+
+@router.delete("/config/notification-templates/{template_id}")
+async def delete_admin_notification_template(
+    template_id: uuid.UUID,
+    request: Request,
+    current_user: dict = IsAdmin,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await admin_notification_templates_service.delete_template(
+        template_id, current_user, _client_ip(request), db
+    )
+    return ok(data=data, message="Notification template removed.")

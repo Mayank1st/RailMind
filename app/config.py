@@ -127,6 +127,11 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_PROVIDER: str = "google"
 
+    # ─── Twilio (WhatsApp / SMS OTP) ───
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_WHATSAPP_FROM: str = "whatsapp:+14155238886"  # sandbox number
+
     model_config = SettingsConfigDict(
         env_file=(".env", f".env.{APP_ENV}"),
         env_file_encoding="utf-8",

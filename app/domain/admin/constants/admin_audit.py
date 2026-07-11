@@ -14,6 +14,7 @@ class AuditTargetType(str, Enum):
     EMAIL = "EMAIL"
     CONFIG = "CONFIG"
     AUTH = "AUTH"
+    TEMPLATE = "TEMPLATE"
     FARE = "FARE"
     HOLIDAY = "HOLIDAY"
     RATE_LIMIT = "RATE_LIMIT"
@@ -57,6 +58,11 @@ class AuditAction(str, Enum):
     QUOTA_CREATED = "QUOTA_CREATED"
     QUOTA_UPDATED = "QUOTA_UPDATED"
     QUOTA_DELETED = "QUOTA_DELETED"
+
+    # ─── Config · Notification templates ──────────────────────────────────────
+    TEMPLATE_CREATED = "TEMPLATE_CREATED"
+    TEMPLATE_UPDATED = "TEMPLATE_UPDATED"
+    TEMPLATE_DELETED = "TEMPLATE_DELETED"
 
     # ─── AI Control · Advisor toggles ─────────────────────────────────────────
     ADVISOR_STATE_CHANGED = "ADVISOR_STATE_CHANGED"

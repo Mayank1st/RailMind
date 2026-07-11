@@ -299,6 +299,43 @@ class VerifyOtpDTO(BaseDTO):
     otp: str
 
 
+# -- WhatsappOtpSend -----------------------------------------
+class WhatsappOtpSendRequestDTO(BaseDTO):
+
+    mobile_number: Annotated[
+        str,
+        Field(
+            pattern=r"^[6-9]\d{9}$",
+            examples=["9876543210"],
+            description="Registered 10-digit Indian mobile number",
+        ),
+    ]
+
+
+# -- WhatsappOtpLogin ----------------------------------------
+class WhatsappOtpLoginRequestDTO(BaseDTO):
+
+    mobile_number: Annotated[
+        str,
+        Field(
+            pattern=r"^[6-9]\d{9}$",
+            examples=["9876543210"],
+            description="Registered 10-digit Indian mobile number",
+        ),
+    ]
+
+    otp: Annotated[
+        str,
+        Field(
+            pattern=r"^\d{6}$",
+            examples=["482913"],
+            description="6-digit OTP received on WhatsApp",
+        ),
+    ]
+
+    remember_me: bool = False  # ON → persistent login; OFF → session cookie
+
+
 # -- UserProfile ---------------------------------------------
 class UserProfileDTO(BaseDTO):
     id: str
