@@ -13,6 +13,10 @@ WAITLIST_AUTO_PROMOTE_BATCH_SIZE = 50
 WAITLIST_MAX_POSITION = 200
 WL_PROMOTION_PRIORITY_ORDER: list[str] = ["GNWL", "RLWL", "PQWL"]
 
+# ─── Booking list search ──────────────────────────────────────────────────────
+
+SEARCH_MAX_LENGTH = 50  # /bookings/ ?search= — PNR / train number / train name
+
 # ─── Chart Preparation ────────────────────────────────────────────────────────
 
 # How many hours before scheduled departure each chart stage is prepared.

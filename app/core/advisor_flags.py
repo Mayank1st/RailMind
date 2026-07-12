@@ -16,6 +16,7 @@ class AdvisorKey(str, Enum):
     FARE = "fare"
     WAITLIST = "waitlist"
     AUTOFILL = "autofill"
+    CANCELLATION = "cancellation"
 
 
 _VALID_STATES = {s.value for s in AdvisorState}

@@ -14,6 +14,8 @@ from app.db.models.train import Trains, TrainStations
 from app.domain.booking.constants.booking import WaitlistType
 from app.domain.waitlist.constants.waitlist_predictor import (
     DEFAULT_ROUTE_CANCEL_RATE,
+    MAX_PROB,
+    MIN_PROB,
     TQWL_MAX_PROB,
     PredictionSource,
 )
@@ -76,6 +78,10 @@ class WaitlistModelService:
             "is_festival_season": is_festival_month(journey_date.month),
         }
         probability = WaitlistPredictorModel.predict_confirm_proba(raw)
+
+        # Honest bounds — a waitlist is never a literal certainty either way; the
+        # rules path already clamps, the model path must too (never a flat 0/1).
+        probability = min(max(probability, MIN_PROB), MAX_PROB)
 
         # TQWL never reaches RAC — structural cap on top of the model (planning §4).
         if wl_type == WaitlistType.TQWL.value:
