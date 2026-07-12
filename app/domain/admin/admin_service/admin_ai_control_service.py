@@ -49,10 +49,12 @@ class AdminAiControlService:
 
     def __init__(self) -> None:
         # advisor_key → model-availability probe (artifact present + loadable)
+        waitlist_model_service = WaitlistModelService()
         self._availability = {
             "fare": FareAdvisorModelService.is_available,
-            "waitlist": WaitlistModelService().is_available,
+            "waitlist": waitlist_model_service.is_available,
             "autofill": AutofillModelService().is_available,
+            "cancellation": waitlist_model_service.is_available,
         }
 
     # ── Read ────────────────────────────────────────────────────────────────

@@ -1,10 +1,3 @@
-# Admin AI Control → Advisor Toggles (per-advisor feature flags).
-#
-# CRUD-lite over the advisor_toggles table: read the 3-state flag + live model
-# metadata for each advisor, and set the flag. State values / Redis key / hot-path
-# reader live in app.core.advisor_flags (shared with the AI serving code). The
-# model_version + metrics are read from app/ai/models/<stem>.metrics.json.
-
 from app.core.advisor_flags import AdvisorKey, AdvisorState
 
 # ─── Error codes (RM-ADMIN-AI-NNN) ────────────────────────────────────────────
@@ -53,6 +46,16 @@ ADVISOR_REGISTRY: dict[str, dict] = {
         "description": "Predicts a user's likely class & quota at search.",
         "metrics_stem": "autofill_class_v2",
         "metric_fields": [("test_accuracy", "Accuracy"), ("baseline", "Baseline")],
+    },
+    AdvisorKey.CANCELLATION.value: {
+        "name": "Cancellation Advisor",
+        "description": (
+            "Refund preview + cancel-or-wait advice; reuses the Waitlist "
+            "Predictor for WL bookings."
+        ),
+        # No artifact of its own — the ML half is the reused waitlist model.
+        "metrics_stem": "waitlist_predictor_v1",
+        "metric_fields": [("precision", "Precision"), ("recall", "Recall")],
     },
 }
 

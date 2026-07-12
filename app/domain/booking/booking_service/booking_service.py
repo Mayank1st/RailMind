@@ -4,7 +4,7 @@ import random
 import string
 
 from fastapi import status
-from sqlalchemy import Select, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from datetime import date
@@ -261,10 +261,22 @@ class BookingService:
         db: AsyncSession,
         *,
         journey_filter: BookingJourneyFilter = BookingJourneyFilter.ALL,
+        search: str | None = None,
         params: Params,
     ):
         today = date.today()
         stmt = self._user_bookings_base_stmt(current_user_id)
+
+        search = (search or "").strip()
+        if search:
+            like = f"%{search}%"
+            stmt = stmt.join(Bookings.train).where(
+                or_(
+                    Bookings.pnr_number.ilike(like),
+                    Trains.train_number.ilike(like),
+                    Trains.train_name.ilike(like),
+                )
+            )
 
         if journey_filter == BookingJourneyFilter.UPCOMING:
             stmt = stmt.where(

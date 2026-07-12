@@ -3,7 +3,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.booking.booking_service.booking_service import BookingService
-from app.domain.booking.constants.booking import JourneyActionType, BookingJourneyFilter
+from app.domain.booking.constants.booking import (
+    SEARCH_MAX_LENGTH,
+    BookingJourneyFilter,
+    JourneyActionType,
+)
 from app.core.pagination import BookingParams, paginated
 from app.domain.booking.booking_service.booking_retry_service import BookingRetryService
 from app.domain.booking.booking_service.booking_retry_service import (
@@ -59,6 +63,11 @@ async def list_user_bookings(
         BookingJourneyFilter.ALL,
         description="Filter bookings by UPCOMING, COMPLETED, CANCELLED or ALL",
     ),
+    search: str | None = Query(
+        None,
+        max_length=SEARCH_MAX_LENGTH,
+        description="Search the whole list by PNR, train number or train name",
+    ),
     params: BookingParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
@@ -67,6 +76,7 @@ async def list_user_bookings(
         current_user_id=current_user["sub"],
         db=db,
         journey_filter=filter,
+        search=search,
         params=params,
     )
     return paginated(page, message="User Booking List Fetched successfully.")
