@@ -4,6 +4,12 @@ from celery.schedules import crontab
 from app.config import settings
 from app.domain.admin.constants.admin_dashboard import OCCUPANCY_ROLLUP_REFRESH_MINUTES
 from app.domain.booking.constants.chart_preparation import CHART_CHECK_INTERVAL_MINUTES
+from app.domain.train.constants.seat_inventory import (
+    SEAT_INVENTORY_EXTEND_HOUR,
+    SEAT_INVENTORY_EXTEND_MINUTE,
+    SEAT_INVENTORY_PRUNE_HOUR,
+    SEAT_INVENTORY_PRUNE_MINUTE,
+)
 from app.domain.trending.constants.trending import (
     TRENDING_RUN_DAY_OF_WEEK,
     TRENDING_RUN_HOUR,
@@ -66,6 +72,18 @@ celery_app.conf.beat_schedule = {
         "task": "dashboard_tasks.task_refresh_daily_occupancy",
         "schedule": crontab(minute=f"*/{OCCUPANCY_ROLLUP_REFRESH_MINUTES}"),
     },
+    "extend-seat-inventory-window": {
+        "task": "seat_inventory_tasks.task_extend_seat_inventory_window",
+        "schedule": crontab(
+            hour=SEAT_INVENTORY_EXTEND_HOUR, minute=SEAT_INVENTORY_EXTEND_MINUTE
+        ),  # 02:30 daily
+    },
+    "prune-seat-inventory": {
+        "task": "seat_inventory_tasks.task_prune_seat_inventory",
+        "schedule": crontab(
+            hour=SEAT_INVENTORY_PRUNE_HOUR, minute=SEAT_INVENTORY_PRUNE_MINUTE
+        ),  # 03:30 daily
+    },
 }
 
 
@@ -81,6 +99,7 @@ def _register_task_modules() -> None:
     import app.tasks.chart_preparation_tasks  # noqa: F401  # naming: ignore
     import app.tasks.trending_tasks  # noqa: F401  # naming: ignore
     import app.tasks.dashboard_tasks  # noqa: F401  # naming: ignore
+    import app.tasks.seat_inventory_tasks  # noqa: F401  # naming: ignore
 
     # Connects task_prerun/task_postrun hooks that record beat-job runs into
     # job_runs (admin Job/Cron Logs). Imported last so beat_schedule is set.
