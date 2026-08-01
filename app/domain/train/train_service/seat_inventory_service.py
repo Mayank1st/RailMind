@@ -27,7 +27,10 @@ class SeatInventoryService:
         return max(1, int(confirmed_seats * percent / 100))
 
     async def extend_rolling_window(self, db: AsyncSession) -> int:
-        target_date = date.today() + timedelta(days=ROLLING_WINDOW_DAYS_AHEAD)
+        today = date.today()
+        window_dates = [
+            today + timedelta(days=d) for d in range(ROLLING_WINDOW_DAYS_AHEAD + 1)
+        ]
 
         coach_counts_result = await db.execute(
             select(Coaches.train_id, Coaches.train_class, func.count(Coaches.id))
@@ -36,15 +39,19 @@ class SeatInventoryService:
         )
         coach_counts = coach_counts_result.all()
 
+        # Self-healing: check the whole window, not just the far edge — a missed
+        # daily run leaves a hole that the next run must still be able to fill.
         existing_result = await db.execute(
             select(
                 SeatInventories.train_id,
+                SeatInventories.journey_date,
                 SeatInventories.train_class,
                 SeatInventories.quota,
-            ).where(SeatInventories.journey_date == target_date)
+            ).where(SeatInventories.journey_date.in_(window_dates))
         )
         existing_keys = {
-            (row.train_id, row.train_class, row.quota) for row in existing_result.all()
+            (row.train_id, row.journey_date, row.train_class, row.quota)
+            for row in existing_result.all()
         }
 
         inventory_records = []
@@ -58,39 +65,40 @@ class SeatInventoryService:
             rac_slots = rac_berths * 2
             quota_alloc = QUOTA_ALLOCATION.get(train_class, QUOTA_ALLOCATION["SL"])
 
-            for quota, percent in quota_alloc.items():
-                if (train_id, train_class, quota) in existing_keys:
-                    continue
+            for journey_date in window_dates:
+                for quota, percent in quota_alloc.items():
+                    if (train_id, journey_date, train_class, quota) in existing_keys:
+                        continue
 
-                quota_seats = self._calc_quota_seats(confirmed_seats, percent)
-                if quota_seats == 0:
-                    continue
+                    quota_seats = self._calc_quota_seats(confirmed_seats, percent)
+                    if quota_seats == 0:
+                        continue
 
-                inv_rac_berths = rac_berths if quota == "GN" else 0
-                inv_rac_slots = rac_slots if quota == "GN" else 0
+                    inv_rac_berths = rac_berths if quota == "GN" else 0
+                    inv_rac_slots = rac_slots if quota == "GN" else 0
 
-                inventory_records.append(
-                    {
-                        "id": uuid4(),
-                        "train_id": train_id,
-                        "journey_date": target_date,
-                        "train_class": train_class,
-                        "quota": quota,
-                        "total_confirmed_seats": quota_seats,
-                        "available_confirmed_seats": quota_seats,
-                        "total_rac_berths": inv_rac_berths,
-                        "total_rac_slots": inv_rac_slots,
-                        "available_rac_slots": inv_rac_slots,
-                        "wl_count": 0,
-                        "wl_max": WL_MAX.get(quota, 100),
-                        "is_chart_prepared": False,
-                        "chart_prepared_at": None,
-                        "quota_released_seats": 0,
-                        "is_active": True,
-                        "created_at": get_utc_timezone(),
-                        "updated_at": get_utc_timezone(),
-                    }
-                )
+                    inventory_records.append(
+                        {
+                            "id": uuid4(),
+                            "train_id": train_id,
+                            "journey_date": journey_date,
+                            "train_class": train_class,
+                            "quota": quota,
+                            "total_confirmed_seats": quota_seats,
+                            "available_confirmed_seats": quota_seats,
+                            "total_rac_berths": inv_rac_berths,
+                            "total_rac_slots": inv_rac_slots,
+                            "available_rac_slots": inv_rac_slots,
+                            "wl_count": 0,
+                            "wl_max": WL_MAX.get(quota, 100),
+                            "is_chart_prepared": False,
+                            "chart_prepared_at": None,
+                            "quota_released_seats": 0,
+                            "is_active": True,
+                            "created_at": get_utc_timezone(),
+                            "updated_at": get_utc_timezone(),
+                        }
+                    )
 
         inserted = 0
         for i in range(0, len(inventory_records), SEAT_INVENTORY_BATCH_SIZE):

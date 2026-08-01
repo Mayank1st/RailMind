@@ -1,10 +1,3 @@
-# Admin Jobs — scheduled Celery/beat job observability (Tier-1 Ops).
-#
-# Producer: app/tasks/job_run_signals.py records every beat-job run into the
-# job_runs table via Celery task_prerun/task_postrun signals. Consumer: the admin
-# console (list + summary tiles + per-job run history + manual "Run now").
-# JobRunStatus / JobTriggerSource enums live in constants/admin.py.
-
 # ─── Error codes (RM-ADMIN-JOB-NNN) ───────────────────────────────────────────
 
 ERR_JOB_NOT_FOUND = "RM-ADMIN-JOB-001"
@@ -26,4 +19,6 @@ JOB_DISPLAY_NAMES = {
     "check-chart-preparation-due": "Chart-prep discovery",
     "compute-weekly-trending-routes": "Weekly trending refresh",
     "refresh-daily-seat-occupancy": "Daily seat-occupancy rollup",
+    "extend-seat-inventory-window": "Seat-inventory rolling window extend",
+    "prune-seat-inventory": "Seat-inventory prune",
 }

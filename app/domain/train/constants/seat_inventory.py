@@ -1,5 +1,9 @@
 # ── Rolling window job ─────────────────────────────────────────────────────
-ROLLING_WINDOW_DAYS_AHEAD = 120
+# Kept at 60 on purpose — the free-tier VM has ~14 GB free, and each extra day
+# of inventory is ~47k rows (only trains that have coaches). 60 gives users a
+# 2-month booking window (half the real IR 120-day ARP) at ~0.8 GB, well within
+# the storage budget.
+ROLLING_WINDOW_DAYS_AHEAD = 60
 
 # ── Retention / prune job ───────────────────────────────────────────────────
 INVENTORY_RETENTION_DAYS = 7
