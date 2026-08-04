@@ -156,9 +156,15 @@ class UserKYC(BaseModel):
         unique=True,
         nullable=False,
     )
-    # Store HMAC-SHA256 hex (64 chars) for deduplication; not plaintext Aadhaar/PAN.
     aadhaar_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     pan_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    aadhaar_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
+    pan_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
+    document_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     kyc_status: Mapped[KycStatus] = mapped_column(
         SAEnum(KycStatus, name="kyc_status_enum"), default=KycStatus.PENDING
     )

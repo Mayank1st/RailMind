@@ -54,6 +54,79 @@ APP_ENV=prod alembic upgrade head          # VM DB pe migrations apply
 >
 > ⚠️ `APP_ENV` ek **real shell variable** hai, `.env` ke andar nahi. Inline `APP_ENV=prod <cmd>` use karna safest hai (galti se prod pe likhne se bachne ke liye). Server start + env files ki poori detail **project root `README.md`** ke "🌍 Local vs Prod" section mein hai.
 
+### 🚨 `.env.prod` ke bina `APP_ENV=prod` kuch nahi karta
+
+Ye is setup ka sabse khatarnak trap hai, aur **koi error nahi deta**.
+
+`app/config.py` yeh karta hai:
+
+```python
+env_file=(".env", f".env.{APP_ENV}"),
+```
+
+`APP_ENV=prod` sirf `.env.prod` **dhoondhta** hai. Agar wo file nahi hai (wo gitignored hai, to fresh clone pe kabhi nahi hoti), pydantic-settings usse **chup-chaap ignore** kar deta hai — na warning, na crash. Sirf `.env` load hota hai, aur tum **local DB** se juud jaate ho — jabki tunnel chalu hai aur tumhe lagta hai tum prod pe ho.
+
+Kaisa dikhta hai jab ye hota hai:
+
+```bash
+scripts/db-tunnel.sh                 # ✅ tunnel started on localhost:5433
+APP_ENV=prod alembic current         # c9e1a4b7d306 (head)   <- LOCAL ka jawab
+APP_ENV=prod alembic upgrade head    # ...silence, kuch nahi hua
+```
+
+`(head)` aur khaamoshi hi clue hain — prod peeche hai to `current` `(head)` nahi likhega.
+
+**30-second check, हमेशा pehle:**
+
+```bash
+APP_ENV=prod python3 -c "from app.config import settings; print(f'{settings.DB_HOST}:{settings.DB_PORT} user={settings.DB_USERNAME}')"
+# sahi:  localhost:5433 user=railmind
+# galat: localhost:5432 user=<tumhara local user>   -> .env.prod missing hai
+```
+
+`.env.prod` sirf **overrides** rakhti hai — baaki sab `.env` se aa jaata hai:
+
+```
+DB_HOST=localhost
+DB_PORT=5433          # <- yahi ek line tunnel ko activate karti hai
+DB_USERNAME=railmind
+DB_PASSWORD=<prod>
+DB_NAME=railmind_db
+DB_SCHEMA=railmind_be
+KYC_ENCRYPTION_KEY=<prod ki key>
+```
+
+`KYC_ENCRYPTION_KEY` isliye zaroori hai kyunki kuch migrations **data backfill** karte hain (jaise `c9e1a4b7d306`, jo Fernet ciphertext decrypt karke HMAC banata hai). Galat key ke saath migration **crash nahi karega** — wo rows chup-chaap skip ho jaayengi aur hash null reh jayega. Backfill wali migration ke baad hamesha result verify karo.
+
+Values VM se nikaal sakte ho (secrets terminal pe print kiye bina):
+
+```bash
+{ printf 'DB_HOST=localhost\nDB_PORT=5433\n'
+  ssh railmind-vm 'docker exec railmind_backend sh -c '"'"'for k in DB_USERNAME DB_PASSWORD DB_NAME DB_SCHEMA KYC_ENCRYPTION_KEY; do printf "%s=%s\n" "$k" "$(printenv $k)"; done'"'"''
+} > .env.prod
+```
+
+### 🐳 `docker exec ... alembic upgrade head` VM pe — doosra trap
+
+Ye sahi DB se to juudta hai, par **container ka code purana hota hai**. Image tab bana tha jab last deploy hua tha, to uske `alembic/versions/` me tumhari nayi migration file hai hi nahi. Uske hisaab se DB already head pe hai → phir wahi khaamoshi.
+
+```bash
+# container ke paas wo revision hai bhi ya nahi:
+ssh railmind-vm 'docker exec railmind_backend ls alembic/versions | grep <revision_id> || echo "MISSING — deploy pehle karo"'
+```
+
+Isliye **deploy se pehle** prod migrate karna ho to tunnel + `APP_ENV=prod` wala raasta lo (migration file tumhare laptop se padhi jaati hai, DB remote hota hai). `docker exec` wala raasta sirf **deploy ke baad** kaam karta hai.
+
+### 🔇 Khaamoshi = kuch nahi hua
+
+Jab migration sach me chalti hai, alembic hamesha bolta hai:
+
+```
+INFO  [alembic.runtime.migration] Running upgrade b8d0f2c4e6a9 -> c9e1a4b7d306, <description>
+```
+
+Ye line nahi dikhi, to koi migration apply nahi hui — chahe command kitni bhi sahi lagi ho. Alembic ka "nothing to do" hamesha sach hota hai; sawaal ye hai ki wo **kis** DB aur **kis** versions folder ko dekh raha tha.
+
 ---
 
 ## ⚙️ Migration Driver (Important)

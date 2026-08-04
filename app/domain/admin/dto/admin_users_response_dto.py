@@ -31,6 +31,9 @@ class AdminUserDetailResponseDTO(BaseDTO):
     kyc_status: str | None
     kyc_document_type: str | None  # "PAN" | "Aadhaar" (null if no doc)
     kyc_document_masked: str | None  # masked number, e.g. "XXXXXX1234F"
+    kyc_document_url: (
+        str | None
+    )  # short-lived signed URL to the captured image (null if none)
     kyc_verified_at: datetime | None
 
 

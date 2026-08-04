@@ -96,6 +96,68 @@ def upload_image_to_supabase(
     return client.storage.from_(settings.SUPABASE_BUCKET).get_public_url(storage_path)
 
 
+def ensure_private_bucket(bucket: str) -> None:
+    """Create `bucket` as PRIVATE if it doesn't exist yet. Idempotent — an
+    already-exists error from Supabase is the success case."""
+    client = get_supabase_client()
+    try:
+        client.storage.create_bucket(bucket, options={"public": False})
+    except Exception as e:
+        if "already exists" in str(e).lower() or "duplicate" in str(e).lower():
+            return
+        raise RailMindException(
+            code="RM-UPL-004",
+            message=f"Could not ensure private bucket {bucket}: {e}",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+        ) from e
+
+
+def upload_private_file(
+    bucket: str, storage_path: str, file_bytes: bytes, content_type: str
+) -> str:
+    """Uploads to a PRIVATE bucket and returns the storage path — deliberately
+    not a URL, since the object has no public URL. Pair with create_signed_url."""
+    client = get_supabase_client()
+    try:
+        client.storage.from_(bucket).upload(
+            path=storage_path,
+            file=file_bytes,
+            file_options={"content-type": content_type, "upsert": "true"},
+        )
+    except Exception as e:
+        raise RailMindException(
+            code="RM-UPL-003",
+            message=f"Supabase upload failed: {str(e)}",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+        ) from e
+
+    return storage_path
+
+
+def create_signed_url(bucket: str, storage_path: str, expires_in: int) -> str:
+    """Short-lived signed URL for an object in a private bucket."""
+    client = get_supabase_client()
+    try:
+        response = client.storage.from_(bucket).create_signed_url(
+            storage_path, expires_in
+        )
+    except Exception as e:
+        raise RailMindException(
+            code="RM-UPL-005",
+            message=f"Could not sign {storage_path}: {e}",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+        ) from e
+
+    signed_url = response.get("signedURL") or response.get("signed_url")
+    if not signed_url:
+        raise RailMindException(
+            code="RM-UPL-005",
+            message=f"Supabase returned no signed URL for {storage_path}",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+        )
+    return signed_url
+
+
 def file_public_url_if_exists(bucket: str, folder: str, file_name: str) -> str | None:
     """Public URL of folder/file_name in a PUBLIC bucket, or None when missing.
     Checked via the public endpoint (HEAD) — works without any RLS policy,

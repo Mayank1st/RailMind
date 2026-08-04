@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     SUPABASE_TICKET_FOLDER: str = "tickets"
     SUPABASE_IMAGE_FOLDER: str = "images"
     SUPABASE_TRENDING_FOLDER: str = "trending"
+    # Separate PRIVATE bucket — KYC documents must never be publicly reachable.
+    SUPABASE_KYC_BUCKET: str = "railmind-kyc"
+    SUPABASE_KYC_FOLDER: str = "kyc"
 
     # PAYMENT
     PAYMENT_MODE: str = "mock"

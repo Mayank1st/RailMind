@@ -30,6 +30,7 @@ from app.core.security import (
     encode_sensistive_data,
     encrypt_kyc,
     decrypt_kyc,
+    hmac_kyc,
     mask_kyc,
 )
 from app.integrations.supabase_client import (
@@ -162,16 +163,23 @@ class AuthService:
             )
 
         # ── 5. KYC uniqueness ─────────────────────────────────────────────────
-        aadhaar_hmac = (
+        # Two representations, on purpose: Fernet ciphertext is what gets stored
+        # (reversible, for masked display) but it is randomised, so it can never be
+        # compared. The HMAC is deterministic and is what dedupe matches on.
+        aadhaar_cipher = (
             encrypt_kyc(payload.aadhaar_number) if payload.aadhaar_number else None
         )
-        pan_hmac = encrypt_kyc(payload.pan_number) if payload.pan_number else None
+        pan_cipher = encrypt_kyc(payload.pan_number) if payload.pan_number else None
+        aadhaar_hash = (
+            hmac_kyc(payload.aadhaar_number) if payload.aadhaar_number else None
+        )
+        pan_hash = hmac_kyc(payload.pan_number) if payload.pan_number else None
 
         kyc_conditions = []
-        if aadhaar_hmac:
-            kyc_conditions.append(UserKYC.aadhaar_number == aadhaar_hmac)
-        if pan_hmac:
-            kyc_conditions.append(UserKYC.pan_number == pan_hmac)
+        if aadhaar_hash:
+            kyc_conditions.append(UserKYC.aadhaar_hash == aadhaar_hash)
+        if pan_hash:
+            kyc_conditions.append(UserKYC.pan_hash == pan_hash)
 
         if kyc_conditions:
             result = await db.execute(
@@ -234,12 +242,14 @@ class AuthService:
             )
         )
 
-        if aadhaar_hmac or pan_hmac:
+        if aadhaar_cipher or pan_cipher:
             db.add(
                 UserKYC(
                     user_id=new_user.id,
-                    aadhaar_number=aadhaar_hmac,
-                    pan_number=pan_hmac,
+                    aadhaar_number=aadhaar_cipher,
+                    pan_number=pan_cipher,
+                    aadhaar_hash=aadhaar_hash,
+                    pan_hash=pan_hash,
                 )
             )
 
@@ -813,6 +823,9 @@ class AuthService:
         }
         # UserKYC table fields
         kyc_fields = {"aadhaar_number", "pan_number"}
+        # document_path is a UserKYC field too, but it is a plain storage path —
+        # kept out of kyc_fields so the hash/encrypt logic below never touches it.
+        kyc_document_path = update_data.pop("kyc_document_path", None)
 
         for key, value in update_data.items():
             if key in user_fields:
@@ -850,6 +863,33 @@ class AuthService:
             if not user.user_kyc:
                 user.user_kyc = UserKYC(user_id=user_id)
 
+            # Deterministic hashes, computed from the plaintext before it is
+            # encrypted. They keep the unique indexes in step with the ciphertext —
+            # a stale hash would let a duplicate through, or raise IntegrityError.
+            new_hashes = {
+                f"{field.removesuffix('_number')}_hash": hmac_kyc(value)
+                for field, value in kyc_updates.items()
+                if value
+            }
+
+            # This path is how OCR-confirmed values land, so it needs the same
+            # uniqueness guard as registration — otherwise the unique index turns a
+            # duplicate submission into a 500 instead of a clear 409.
+            clashes = [
+                getattr(UserKYC, column) == digest
+                for column, digest in new_hashes.items()
+            ]
+            if clashes:
+                existing = await db.execute(
+                    select(UserKYC).where(or_(*clashes), UserKYC.user_id != user_id)
+                )
+                if existing.scalar_one_or_none():
+                    raise RailMindException(
+                        code="RM-AUTH-006",
+                        message="KYC documents already linked to another account",
+                        status_code=409,
+                    )
+
             # Encrypt Aadhaar and PAN before storing
             if "aadhaar_number" in kyc_updates and kyc_updates["aadhaar_number"]:
                 kyc_updates["aadhaar_number"] = encrypt_kyc(
@@ -860,6 +900,14 @@ class AuthService:
 
             for key, value in kyc_updates.items():
                 setattr(user.user_kyc, key, value)
+            for column, digest in new_hashes.items():
+                setattr(user.user_kyc, column, digest)
+
+        # ── Attach the confirmed KYC document (path only, no crypto) ─────────────
+        if kyc_document_path:
+            if not user.user_kyc:
+                user.user_kyc = UserKYC(user_id=user_id)
+            user.user_kyc.document_path = kyc_document_path
 
         # ── Commit all changes ────────────────────────────────────────────────────
         await db.flush()

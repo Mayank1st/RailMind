@@ -7,6 +7,7 @@ from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.core.exceptions import RailMindException
 from app.core.security import decrypt_kyc, mask_kyc
 from app.db.models.booking import Bookings
@@ -33,6 +34,8 @@ from app.domain.admin.dto.admin_users_response_dto import (
     AdminUsersSummaryStatsDTO,
 )
 from app.domain.auth.constants.auth_user import KycStatus
+from app.domain.kyc.constants.kyc import ADMIN_KYC_DOC_URL_TTL_SECONDS
+from app.integrations.supabase_client import create_signed_url
 from app.utils.logger import logger
 
 audit_service = AdminAuditService()
@@ -305,17 +308,34 @@ class AdminUsersService:
         )
 
     @staticmethod
-    def _kyc_document(kyc: Optional[UserKYC]) -> tuple[Optional[str], Optional[str]]:
+    def _kyc_document(
+        kyc: Optional[UserKYC],
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        """(document_type, masked_number, signed_image_url). The URL is short-lived
+        and null when no image was captured (legacy rows / manually-typed KYC).
+        A signing failure never breaks the detail view — it degrades to no URL."""
         if kyc is None:
-            return None, None
+            return None, None, None
+
+        image_url = None
+        if kyc.document_path:
+            try:
+                image_url = create_signed_url(
+                    settings.SUPABASE_KYC_BUCKET,
+                    kyc.document_path,
+                    ADMIN_KYC_DOC_URL_TTL_SECONDS,
+                )
+            except Exception:
+                logger.warning("could not sign KYC document for admin review")
+
         try:
             if kyc.pan_number:
-                return "PAN", mask_kyc(decrypt_kyc(kyc.pan_number))
+                return "PAN", mask_kyc(decrypt_kyc(kyc.pan_number)), image_url
             if kyc.aadhaar_number:
-                return "Aadhaar", mask_kyc(decrypt_kyc(kyc.aadhaar_number))
+                return "Aadhaar", mask_kyc(decrypt_kyc(kyc.aadhaar_number)), image_url
         except Exception:
-            return None, None
-        return None, None
+            return None, None, image_url
+        return None, None, image_url
 
     def _serialize_summary(
         self, user: Users, bookings_count: int
@@ -336,7 +356,7 @@ class AdminUsersService:
         self, user: Users, lifetime_bookings: int
     ) -> AdminUserDetailResponseDTO:
         contact = user.user_contact
-        doc_type, doc_masked = self._kyc_document(user.user_kyc)
+        doc_type, doc_masked, doc_url = self._kyc_document(user.user_kyc)
         return AdminUserDetailResponseDTO(
             user_id=str(user.id),
             name=self._full_name(user.user_profile) or user.username,
@@ -351,5 +371,6 @@ class AdminUsersService:
             kyc_status=self._kyc_status(user.user_kyc),
             kyc_document_type=doc_type,
             kyc_document_masked=doc_masked,
+            kyc_document_url=doc_url,
             kyc_verified_at=user.user_kyc.verified_at if user.user_kyc else None,
         )
