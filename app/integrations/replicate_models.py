@@ -12,6 +12,7 @@ Replicate model is called.
 
 MODEL1 = "openai/gpt-5-nano"
 MODEL2 = "google/nano-banana-2"  # image generation (weekly city carousel)
+MODEL3 = "openai/gpt-5-mini"
 
 REPLICATE_MODELS: dict[str, str] = {
     name: value

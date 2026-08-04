@@ -1,6 +1,6 @@
 ---
 name: railmind-conventions
-description: RailMind FastAPI backend coding conventions — folder/file naming, router file layout, service classes, DTO naming and structure, SQLAlchemy models, and enums. Use whenever writing or editing any Python in the RailMind backend, and before committing backend changes.
+description: RailMind FastAPI backend coding conventions — folder/file naming, router file layout, service classes, DTO naming and structure, SQLAlchemy models, enums — plus the feature delivery checklist (test curls, a Claude Design UI prompt, and an FE integration .md). Use whenever writing or editing any Python in the RailMind backend, before committing backend changes, and whenever a feature is finished or about to be pushed to dev or prod.
 ---
 
 # RailMind backend conventions
@@ -276,3 +276,62 @@ exceptions, permissions, filters), and the shared base DTO at `app/schemas/base.
 - The `fastapi-filter` inner `class Constants` inside a filter DTO can't end in `DTO`;
   tag its line `# naming: ignore` so the naming checker
   (`scripts/check_naming_conventions.py`) skips it.
+
+## 11. Feature delivery checklist
+
+A feature is not "done" when the code compiles. Before pushing to dev or prod,
+deliver these three, **in this order**. Do not skip one because the feature
+"looks small" — they are how the work gets reviewed, designed, and consumed.
+
+### 11.1 Test curls first
+
+Give ready-to-run curls for every endpoint the feature adds or changes, in the
+chat, before anything else.
+
+- Real values, not placeholders — a working auth cookie/token, a real path, a
+  real id from the dev DB. The reader must be able to paste and run.
+- Cover the failure cases too, not just the happy path: auth missing, bad input,
+  the size/type limits, the rate limit, and the degraded path (LLM down, no
+  inventory, unresolved input). One line each is enough.
+- State what each one should return. A curl with no expected result cannot fail
+  a review.
+- Say plainly what you actually ran versus what you did not. If a case was
+  verified against the live dev DB, say so; if it was reasoned about only, say
+  that too.
+- Note anything that resets state between runs (e.g. the Redis rate-limit key).
+- If the feature writes data, clean up what the testing created and say so.
+
+### 11.2 A UI prompt for Claude Design — in the chat
+
+Write a self-contained prompt the user can paste straight into Claude Design to
+generate this feature's screen. Put it in the chat as a copy-paste block; it is
+not a repo file.
+
+It must carry everything the designer has no way to know:
+
+- What the screen is for and who is looking at it.
+- The exact request and response shape, with a real example payload.
+- **Every** state the UI must handle — loading, success, empty, each error code
+  the endpoint can return, and any partial/degraded result (a null field, an
+  unread value, a "needs input" response).
+- What must never be shown raw (masked ID numbers, internal codes, storage
+  paths), and what the user is expected to confirm or correct.
+- Existing product context — where this screen sits in the flow, and which
+  screen it should look consistent with.
+
+### 11.3 An FE integration `.md`
+
+Write `docs/<feature>-frontend.md` after the curls pass.
+
+- Endpoint, method, auth, rate limit, and the full request/response shape with a
+  realistic example.
+- Every error code with what the FE should do about it — not just what it means.
+- The states from 11.2, described as behaviour rather than visuals.
+- Any follow-up call the FE must make (e.g. a confirm step that reuses an
+  existing endpoint) and any field it must send back unchanged.
+- Gotchas that will otherwise cost the FE a day: a response key spelled
+  differently from the rest of the API, a value that is a storage path and not a
+  URL, a list that is deliberately capped, a default that is not what it looks
+  like.
+
+These files get wiped on branch switches — commit them with the feature.

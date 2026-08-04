@@ -385,4 +385,7 @@ class UpdateUserProfileDTO(BaseDTO):
     landline_number: Optional[str] = Field(None, pattern=r"^\d{6,10}$")
     aadhaar_number: Optional[str] = Field(None, pattern=r"^\d{12}$")
     pan_number: Optional[str] = Field(None, pattern=r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$")
+    kyc_document_path: Optional[str] = Field(
+        None, max_length=255
+    )  # storage path from /ai/kyc/extract, echoed back on confirm
     mobile_number: Optional[str] = None
